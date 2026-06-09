@@ -1,0 +1,56 @@
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  fmt: {
+    sortImports: true,
+  },
+  lint: {
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: {
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "typescript/no-unnecessary-condition": "error",
+      "typescript/strict-boolean-expressions": "error",
+      "typescript/no-explicit-any": "error",
+      "typescript/no-unsafe-assignment": "error",
+      "typescript/no-unsafe-argument": "error",
+      "typescript/no-unsafe-call": "error",
+      "typescript/no-unsafe-member-access": "error",
+      "typescript/no-unsafe-return": "error",
+      "typescript/no-unsafe-type-assertion": "error",
+      "typescript/no-unnecessary-type-assertion": "error",
+      "typescript/no-non-null-assertion": "error",
+      "typescript/consistent-type-imports": "error",
+      "import/consistent-type-specifier-style": "error",
+      "typescript/only-throw-error": "error",
+      "typescript/no-dynamic-delete": "error",
+      "typescript/no-misused-promises": "error",
+      "typescript/use-unknown-in-catch-callback-variable": "error",
+      "typescript/switch-exhaustiveness-check": "error",
+      "typescript/no-unsafe-enum-comparison": "error",
+      "typescript/restrict-plus-operands": "error",
+      "typescript/prefer-nullish-coalescing": "error",
+      "typescript/no-empty-object-type": "error",
+      "typescript/no-confusing-void-expression": "error",
+      "typescript/require-await": "error",
+      "react/rules-of-hooks": "error",
+      "react/exhaustive-deps": "error",
+      "react/jsx-key": "error",
+      "react/jsx-no-duplicate-props": "error",
+      "react/button-has-type": "error",
+      "react/jsx-no-constructed-context-values": "error",
+      "react/no-unstable-nested-components": "error",
+      "react/jsx-no-useless-fragment": "error",
+    },
+    options: { typeAware: true, typeCheck: true },
+  },
+  test: {
+    projects: [],
+    silent: "passed-only",
+  },
+  run: {
+    cache: true,
+  },
+});
