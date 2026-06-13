@@ -1,5 +1,6 @@
 export {
   AppError,
+  BadRequestError,
   ConflictError,
   type ErrorCode,
   type ErrorDetails,
@@ -14,4 +15,5 @@ export {
   createIncludeRuleNotFoundError,
   createInsertReturnedNoRowsError,
   createSourceRootNotFoundError,
+  createSourceRootPathUnavailableError,
 } from "./factories.ts";

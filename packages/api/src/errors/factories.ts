@@ -1,4 +1,12 @@
-import { ConflictError, InternalError, NotFoundError } from "./classes.ts";
+import { BadRequestError, ConflictError, InternalError, NotFoundError } from "./classes.ts";
+
+export function createSourceRootPathUnavailableError(
+  rootId: string,
+  path: string,
+  cause?: unknown,
+) {
+  return new BadRequestError("source root のパスにアクセスできません", { rootId, path }, cause);
+}
 
 export function createSourceRootNotFoundError(rootId?: string) {
   return new NotFoundError(

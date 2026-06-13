@@ -2,6 +2,7 @@ import { Hono } from "hono";
 
 import type { ApiEnv } from "../lib/context.ts";
 import { db } from "../lib/db/index.ts";
+import { listSourceFiles } from "../lib/services/source-file.ts";
 import {
   createSourceRoot,
   deleteSourceRoot,
@@ -68,4 +69,9 @@ export const sourceRootsRoute = new Hono<ApiEnv>()
       sortOrder: body.sortOrder,
     });
     return c.json({ excludeRule }, 201);
+  })
+  .get("/:rootId/files", async (c) => {
+    const rootId = c.req.param("rootId");
+    const files = await listSourceFiles(db, rootId);
+    return c.json({ files }, 200);
   });

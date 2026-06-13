@@ -2,7 +2,8 @@ import { testClient } from "hono/testing";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { apiApp } from "../app.ts";
-import { ConflictError, NotFoundError } from "../errors/index.ts";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors/index.ts";
+import { listSourceFiles } from "../lib/services/source-file.ts";
 import {
   createSourceRoot,
   deleteSourceRoot,
@@ -18,6 +19,7 @@ import {
 
 vi.mock("../lib/services/source-root.ts");
 vi.mock("../lib/services/source-rule.ts");
+vi.mock("../lib/services/source-file.ts");
 
 const client = testClient(apiApp);
 
@@ -307,5 +309,47 @@ describe("POST /source-roots/:rootId/exclude-rules", () => {
       pattern: "exclude",
       sortOrder: undefined,
     });
+  });
+});
+
+describe("GET /source-roots/:rootId/files", () => {
+  it("files 一覧を返す", async () => {
+    const mockFiles = [{ relativePath: "Series/#01.mp4" }];
+    vi.mocked(listSourceFiles).mockResolvedValue(mockFiles);
+
+    const res = await client["source-roots"][":rootId"].files.$get({
+      param: { rootId: "ROOT1" },
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toEqual({ files: mockFiles });
+    expect(listSourceFiles).toHaveBeenCalledWith(expect.anything(), "ROOT1");
+  });
+
+  it("service が NotFoundError を投げた場合は 404 を返す", async () => {
+    vi.mocked(listSourceFiles).mockRejectedValue(new NotFoundError("source root が見つかりません"));
+
+    const res = await client["source-roots"][":rootId"].files.$get({
+      param: { rootId: "ROOT1" },
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json).toEqual({ error: "source root が見つかりません" });
+  });
+
+  it("service が BadRequestError を投げた場合は 400 を返す", async () => {
+    vi.mocked(listSourceFiles).mockRejectedValue(
+      new BadRequestError("source root のパスにアクセスできません"),
+    );
+
+    const res = await client["source-roots"][":rootId"].files.$get({
+      param: { rootId: "ROOT1" },
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "source root のパスにアクセスできません" });
   });
 });

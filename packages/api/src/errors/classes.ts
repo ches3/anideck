@@ -28,6 +28,12 @@ export class AppError extends Error {
   }
 }
 
+export class BadRequestError extends AppError {
+  constructor(message: string = "リクエストが不正です", details?: ErrorDetails, cause?: unknown) {
+    super("VALIDATION_FAILED", message, 400, details, cause);
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(
     message: string = "対象のデータが存在しません",
