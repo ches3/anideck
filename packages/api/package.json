@@ -1,0 +1,30 @@
+{
+  "name": "@anideck/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": "./src/app.ts",
+    "./validation/*": "./src/lib/validation/*.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@hono/valibot-validator": "^0.6.1",
+    "@libsql/client": "^0.17.2",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.12.8",
+    "ulid": "^3.0.2",
+    "valibot": "^1.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  }
+}

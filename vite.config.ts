@@ -6,6 +6,7 @@ export default defineConfig({
   },
   fmt: {
     sortImports: true,
+    ignorePatterns: ["packages/api/drizzle/**"],
   },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
@@ -47,7 +48,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    projects: [],
+    projects: ["packages/api"],
     silent: "passed-only",
   },
   run: {

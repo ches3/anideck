@@ -1,0 +1,18 @@
+packages:
+  - "packages/*"
+
+catalog:
+  "@types/node": ^25.5.0
+  typescript: ^6.0.2
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+
+minimumReleaseAge: 4320
+
+allowBuilds:
+  esbuild: true

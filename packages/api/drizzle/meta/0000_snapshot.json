@@ -1,0 +1,180 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "4d55da24-18fa-4603-9018-b5cd83834066",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "source_exclude_rules": {
+      "name": "source_exclude_rules",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "root_id": {
+          "name": "root_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pattern": {
+          "name": "pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "unique_source_exclude_rule_pattern": {
+          "name": "unique_source_exclude_rule_pattern",
+          "columns": [
+            "root_id",
+            "pattern"
+          ],
+          "isUnique": true
+        },
+        "unique_source_exclude_rule_sort_order": {
+          "name": "unique_source_exclude_rule_sort_order",
+          "columns": [
+            "root_id",
+            "sort_order"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "source_exclude_rules_root_id_source_roots_id_fk": {
+          "name": "source_exclude_rules_root_id_source_roots_id_fk",
+          "tableFrom": "source_exclude_rules",
+          "tableTo": "source_roots",
+          "columnsFrom": [
+            "root_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "source_include_rules": {
+      "name": "source_include_rules",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "root_id": {
+          "name": "root_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pattern": {
+          "name": "pattern",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "unique_source_include_rule_pattern": {
+          "name": "unique_source_include_rule_pattern",
+          "columns": [
+            "root_id",
+            "pattern"
+          ],
+          "isUnique": true
+        },
+        "unique_source_include_rule_sort_order": {
+          "name": "unique_source_include_rule_sort_order",
+          "columns": [
+            "root_id",
+            "sort_order"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "source_include_rules_root_id_source_roots_id_fk": {
+          "name": "source_include_rules_root_id_source_roots_id_fk",
+          "tableFrom": "source_include_rules",
+          "tableTo": "source_roots",
+          "columnsFrom": [
+            "root_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "source_roots": {
+      "name": "source_roots",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "path": {
+          "name": "path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
