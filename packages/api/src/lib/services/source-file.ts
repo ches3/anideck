@@ -2,13 +2,10 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import { join, relative } from "node:path";
 
-import {
-  AppError,
-  createSourceRootNotFoundError,
-  createSourceRootPathUnavailableError,
-} from "../../errors/index.ts";
+import { createSourceRootNotFoundError, createSourceRootPathError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
-import { getSourceRoot } from "./source-root.ts";
+import { classifySourceRootPathFailure } from "../fs-error.ts";
+import { assertSourceRootPathAvailable, getSourceRoot } from "./source-root.ts";
 import { listSourceExcludeRules, listSourceIncludeRules } from "./source-rule.ts";
 
 export interface SourceFileRecord {
@@ -21,20 +18,6 @@ function toApiRelativePath(rootPath: string, filePath: string): string {
 
 function matchesAnyPattern(relativePath: string, patterns: string[]): boolean {
   return patterns.some((pattern) => new RegExp(pattern).test(relativePath));
-}
-
-async function assertSourceRootPathAvailable(rootId: string, rootPath: string): Promise<void> {
-  try {
-    const stats = await fs.stat(rootPath);
-    if (!stats.isDirectory()) {
-      throw createSourceRootPathUnavailableError(rootId, rootPath);
-    }
-  } catch (error) {
-    if (error instanceof AppError) {
-      throw error;
-    }
-    throw createSourceRootPathUnavailableError(rootId, rootPath, error);
-  }
 }
 
 async function readDirectoryEntries(dirPath: string, skipOnError: boolean): Promise<Dirent[]> {
@@ -72,7 +55,7 @@ export async function listSourceFiles(db: Db, rootId: string): Promise<SourceFil
     throw createSourceRootNotFoundError(rootId);
   }
 
-  await assertSourceRootPathAvailable(rootId, root.path);
+  await assertSourceRootPathAvailable(root.path);
 
   const includeRules = await listSourceIncludeRules(db, rootId);
   if (includeRules.length === 0) {
@@ -87,7 +70,7 @@ export async function listSourceFiles(db: Db, rootId: string): Promise<SourceFil
   try {
     filePaths = await walkFiles(root.path, false);
   } catch (error) {
-    throw createSourceRootPathUnavailableError(rootId, root.path, error);
+    throw createSourceRootPathError(classifySourceRootPathFailure(error), root.path, error);
   }
 
   return filePaths

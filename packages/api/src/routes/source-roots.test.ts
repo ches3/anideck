@@ -61,6 +61,20 @@ describe("POST /source-roots", () => {
 
     expect(res.status).toBe(400);
   });
+
+  it("service が BadRequestError を投げた場合は 400 を返す", async () => {
+    vi.mocked(createSourceRoot).mockRejectedValue(
+      new BadRequestError("指定されたパスのフォルダは存在しません。"),
+    );
+
+    const res = await client["source-roots"].$post({
+      json: { path: "/media/anime" },
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "指定されたパスのフォルダは存在しません。" });
+  });
 });
 
 describe("PATCH /source-roots/:rootId", () => {
@@ -100,6 +114,21 @@ describe("PATCH /source-roots/:rootId", () => {
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it("service が BadRequestError を投げた場合は 400 を返す", async () => {
+    vi.mocked(updateSourceRoot).mockRejectedValue(
+      new BadRequestError("指定されたパスのフォルダは存在しません。"),
+    );
+
+    const res = await client["source-roots"][":rootId"].$patch({
+      param: { rootId: "ROOT1" },
+      json: { path: "/media/anime2" },
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json).toEqual({ error: "指定されたパスのフォルダは存在しません。" });
   });
 });
 
@@ -341,7 +370,7 @@ describe("GET /source-roots/:rootId/files", () => {
 
   it("service が BadRequestError を投げた場合は 400 を返す", async () => {
     vi.mocked(listSourceFiles).mockRejectedValue(
-      new BadRequestError("source root のパスにアクセスできません"),
+      new BadRequestError("指定されたパスのフォルダは存在しません。"),
     );
 
     const res = await client["source-roots"][":rootId"].files.$get({
@@ -350,6 +379,6 @@ describe("GET /source-roots/:rootId/files", () => {
 
     expect(res.status).toBe(400);
     const json = await res.json();
-    expect(json).toEqual({ error: "source root のパスにアクセスできません" });
+    expect(json).toEqual({ error: "指定されたパスのフォルダは存在しません。" });
   });
 });

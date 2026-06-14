@@ -1,16 +1,41 @@
+import * as fs from "node:fs/promises";
+
 import { eq } from "drizzle-orm";
 import { ulid } from "ulid";
 
 import {
+  AppError,
   createInsertReturnedNoRowsError,
   createSourceRootNotFoundError,
+  createSourceRootPathError,
 } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
 import { sourceRoots } from "../db/schema.ts";
+import { classifySourceRootPathFailure } from "../fs-error.ts";
 
 export interface SourceRootRecord {
   id: string;
   path: string;
+}
+
+export async function assertSourceRootPathAvailable(path: string): Promise<void> {
+  try {
+    const stats = await fs.stat(path);
+    if (!stats.isDirectory()) {
+      throw createSourceRootPathError("not_directory", path);
+    }
+    const dir = await fs.opendir(path);
+    try {
+      await dir.read();
+    } finally {
+      await dir.close();
+    }
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw createSourceRootPathError(classifySourceRootPathFailure(error), path, error);
+  }
 }
 
 export async function listSourceRoots(db: Db): Promise<SourceRootRecord[]> {
@@ -23,6 +48,8 @@ export async function listSourceRoots(db: Db): Promise<SourceRootRecord[]> {
 }
 
 export async function createSourceRoot(db: Db, input: { path: string }): Promise<SourceRootRecord> {
+  await assertSourceRootPathAvailable(input.path);
+
   const result = await db
     .insert(sourceRoots)
     .values({
@@ -48,6 +75,13 @@ export async function updateSourceRoot(
   rootId: string,
   input: { path: string },
 ): Promise<SourceRootRecord> {
+  const existing = await getSourceRoot(db, rootId);
+  if (existing === null) {
+    throw createSourceRootNotFoundError(rootId);
+  }
+
+  await assertSourceRootPathAvailable(input.path);
+
   const result = await db
     .update(sourceRoots)
     .set({ path: input.path })

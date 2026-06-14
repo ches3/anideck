@@ -1,11 +1,19 @@
 import { BadRequestError, ConflictError, InternalError, NotFoundError } from "./classes.ts";
 
-export function createSourceRootPathUnavailableError(
-  rootId: string,
+export type SourceRootPathErrorReason = "not_found" | "not_directory" | "unreadable";
+
+export function createSourceRootPathError(
+  reason: SourceRootPathErrorReason,
   path: string,
   cause?: unknown,
 ) {
-  return new BadRequestError("source root のパスにアクセスできません", { rootId, path }, cause);
+  const messages: Record<SourceRootPathErrorReason, string> = {
+    not_found: "指定されたパスは存在しません",
+    not_directory: "指定されたパスはフォルダではありません",
+    unreadable: "指定されたフォルダを読み取れません",
+  };
+
+  return new BadRequestError(messages[reason], { path }, cause);
 }
 
 export function createSourceRootNotFoundError(rootId?: string) {

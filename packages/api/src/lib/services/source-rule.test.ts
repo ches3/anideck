@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { ConflictError, NotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
+import { sourceRoots } from "../db/schema.ts";
 import { createTestDb } from "../db/test-helper.ts";
-import { createSourceRoot } from "./source-root.ts";
 import {
   createSourceExcludeRule,
   createSourceIncludeRule,
@@ -21,8 +21,11 @@ describe("source-rule service", () => {
 
   beforeEach(async () => {
     ({ db } = await createTestDb());
-    const root = await createSourceRoot(db, { path: "/media/anime" });
-    rootId = root.id;
+    rootId = "source-root";
+    await db.insert(sourceRoots).values({
+      id: rootId,
+      path: "/source-root",
+    });
   });
 
   it("include rule を作成できる", async () => {
@@ -383,7 +386,11 @@ describe("source-rule service", () => {
   });
 
   it("別 root では同じ pattern と sortOrder を使える", async () => {
-    const otherRoot = await createSourceRoot(db, { path: "/media/other" });
+    const otherRootId = "other-source-root";
+    await db.insert(sourceRoots).values({
+      id: otherRootId,
+      path: "/other-source-root",
+    });
 
     const first = await createSourceIncludeRule(db, {
       rootId,
@@ -391,13 +398,13 @@ describe("source-rule service", () => {
       sortOrder: 0,
     });
     const second = await createSourceIncludeRule(db, {
-      rootId: otherRoot.id,
+      rootId: otherRootId,
       pattern: "shared-pattern",
       sortOrder: 0,
     });
 
     expect(first.rootId).toBe(rootId);
-    expect(second.rootId).toBe(otherRoot.id);
+    expect(second.rootId).toBe(otherRootId);
     expect(first.pattern).toBe(second.pattern);
     expect(first.sortOrder).toBe(second.sortOrder);
   });

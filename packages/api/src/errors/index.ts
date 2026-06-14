@@ -15,5 +15,6 @@ export {
   createIncludeRuleNotFoundError,
   createInsertReturnedNoRowsError,
   createSourceRootNotFoundError,
-  createSourceRootPathUnavailableError,
+  createSourceRootPathError,
+  type SourceRootPathErrorReason,
 } from "./factories.ts";

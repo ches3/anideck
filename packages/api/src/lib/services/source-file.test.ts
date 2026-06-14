@@ -3,10 +3,12 @@ import type * as FsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 
+import { ulid } from "ulid";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { BadRequestError, NotFoundError } from "../../errors/index.ts";
+import { NotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
+import { sourceRoots } from "../db/schema.ts";
 import { createTestDb } from "../db/test-helper.ts";
 import { listSourceFiles } from "./source-file.ts";
 import { createSourceRoot } from "./source-root.ts";
@@ -14,6 +16,7 @@ import { createSourceExcludeRule, createSourceIncludeRule } from "./source-rule.
 
 const fsMockState = vi.hoisted(() => ({
   unreadableDirPath: undefined as string | undefined,
+  unreadableErrorCode: "ENOENT" as string,
 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -28,8 +31,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
         fsMockState.unreadableDirPath !== undefined &&
         String(path) === fsMockState.unreadableDirPath
       ) {
-        const error = new Error("directory vanished") as NodeJS.ErrnoException;
-        error.code = "ENOENT";
+        const error = new Error("directory read failed") as NodeJS.ErrnoException;
+        error.code = fsMockState.unreadableErrorCode;
         throw error;
       }
       return actual.readdir(path, options);
@@ -57,6 +60,7 @@ describe("source-file service", () => {
 
   afterEach(async () => {
     fsMockState.unreadableDirPath = undefined;
+    fsMockState.unreadableErrorCode = "ENOENT";
     vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
   });
@@ -134,8 +138,30 @@ describe("source-file service", () => {
 
   it("存在しない root path は BadRequestError になる", async () => {
     const missingPath = join(tempDir, "missing-root");
-    const root = await createSourceRoot(db, { path: missingPath });
+    const rootId = ulid();
+    await db.insert(sourceRoots).values({
+      id: rootId,
+      path: missingPath,
+    });
 
-    await expect(listSourceFiles(db, root.id)).rejects.toBeInstanceOf(BadRequestError);
+    await expect(listSourceFiles(db, rootId)).rejects.toMatchObject({
+      message: "指定されたパスは存在しません",
+    });
+  });
+
+  it("読み取れない root path は BadRequestError になる", async () => {
+    await writeFile(join(tempDir, "video.mp4"), "");
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: ".*\\.mp4",
+      sortOrder: 0,
+    });
+
+    fsMockState.unreadableDirPath = tempDir;
+    fsMockState.unreadableErrorCode = "EACCES";
+
+    await expect(listSourceFiles(db, rootId)).rejects.toMatchObject({
+      message: "指定されたフォルダを読み取れません",
+    });
   });
 });
