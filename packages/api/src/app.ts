@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { ApplyGlobalResponse } from "hono/client";
 
 import { AppError } from "./errors/index.ts";
 import type { ApiEnv } from "./lib/context.ts";
@@ -54,5 +55,16 @@ const apiApp = new Hono<ApiEnv>()
   .route("/source-exclude-rules", sourceExcludeRulesRoute)
   .route("/works", worksRoute);
 
-export type ApiAppType = typeof apiApp;
+interface ApiErrorResponse {
+  error: string;
+}
+
+type ApiGlobalResponses = {
+  400: { json: ApiErrorResponse };
+  404: { json: ApiErrorResponse };
+  409: { json: ApiErrorResponse };
+  500: { json: ApiErrorResponse };
+};
+
+export type ApiAppType = ApplyGlobalResponse<typeof apiApp, ApiGlobalResponses>;
 export { apiApp };

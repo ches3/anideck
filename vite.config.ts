@@ -25,7 +25,12 @@ export default defineConfig({
       "typescript/no-non-null-assertion": "error",
       "typescript/consistent-type-imports": "error",
       "import/consistent-type-specifier-style": "error",
-      "typescript/only-throw-error": "error",
+      "typescript/only-throw-error": [
+        "error",
+        {
+          allow: [{ from: "package", name: "DataWithResponseInit", package: "react-router" }],
+        },
+      ],
       "typescript/no-dynamic-delete": "error",
       "typescript/no-misused-promises": "error",
       "typescript/use-unknown-in-catch-callback-variable": "error",
@@ -48,7 +53,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    projects: ["packages/api"],
+    projects: ["packages/api", "packages/web"],
     silent: "passed-only",
   },
   run: {

@@ -2,10 +2,11 @@ packages:
   - "packages/*"
 
 catalog:
-  "@types/node": ^25.5.0
-  typescript: ^6.0.2
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  "@types/node": ^25.9.2
+  hono: ^4.12.25
+  typescript: ^6.0.3
+  vite: npm:@voidzero-dev/vite-plus-core@^0.1.24
+  vitest: npm:@voidzero-dev/vite-plus-test@^0.1.24
   vite-plus: latest
 
 overrides:

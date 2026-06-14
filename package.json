@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "prepare": "vp config",
-    "dev": "pnpm --filter @anideck/host dev",
-    "build": "pnpm --filter @anideck/host build",
-    "start": "pnpm --filter @anideck/host start"
+    "dev": "pnpm --filter @anideck/web dev",
+    "build": "pnpm --filter @anideck/web build",
+    "start": "pnpm --filter @anideck/web start"
   },
   "devDependencies": {
     "vite-plus": "catalog:"
