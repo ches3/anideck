@@ -6,6 +6,7 @@ import { toErrorResponse } from "./lib/error-response.ts";
 import { sourceExcludeRulesRoute } from "./routes/source-exclude-rules.ts";
 import { sourceIncludeRulesRoute } from "./routes/source-include-rules.ts";
 import { sourceRootsRoute } from "./routes/source-roots.ts";
+import { worksRoute } from "./routes/works.ts";
 
 const apiApp = new Hono<ApiEnv>()
   .use("*", async (c, next) => {
@@ -50,7 +51,8 @@ const apiApp = new Hono<ApiEnv>()
   })
   .route("/source-roots", sourceRootsRoute)
   .route("/source-include-rules", sourceIncludeRulesRoute)
-  .route("/source-exclude-rules", sourceExcludeRulesRoute);
+  .route("/source-exclude-rules", sourceExcludeRulesRoute)
+  .route("/works", worksRoute);
 
 export type ApiAppType = typeof apiApp;
 export { apiApp };

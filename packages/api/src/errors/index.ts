@@ -16,5 +16,6 @@ export {
   createInsertReturnedNoRowsError,
   createSourceRootNotFoundError,
   createSourceRootPathError,
+  createWorkNotFoundError,
   type SourceRootPathErrorReason,
 } from "./factories.ts";

@@ -37,6 +37,10 @@ export function createExcludeRuleNotFoundError(ruleId?: string) {
   );
 }
 
+export function createWorkNotFoundError(workId?: string) {
+  return new NotFoundError("work が見つかりません", workId !== undefined ? { workId } : undefined);
+}
+
 export function createDuplicatePatternError(pattern: string) {
   return new ConflictError("同一のルールが既に存在します", {
     pattern,
