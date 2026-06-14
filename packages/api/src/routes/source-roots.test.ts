@@ -343,7 +343,12 @@ describe("POST /source-roots/:rootId/exclude-rules", () => {
 
 describe("GET /source-roots/:rootId/files", () => {
   it("files 一覧を返す", async () => {
-    const mockFiles = [{ relativePath: "Series/#01.mp4" }];
+    const mockFiles = [
+      {
+        relativePath: "Series/#01.mp4",
+        title: { work: "Series", episode: "#01" },
+      },
+    ];
     vi.mocked(listSourceFiles).mockResolvedValue(mockFiles);
 
     const res = await client["source-roots"][":rootId"].files.$get({

@@ -7,13 +7,44 @@ import type { Db } from "../db/index.ts";
 import { classifySourceRootPathFailure } from "../fs-error.ts";
 import { assertSourceRootPathAvailable, getSourceRoot } from "./source-root.ts";
 import { listSourceExcludeRules, listSourceIncludeRules } from "./source-rule.ts";
+import type { SourceRuleRecord } from "./source-rule.ts";
+
+export interface SourceFileTitle {
+  work: string;
+  episode: string;
+}
 
 export interface SourceFileRecord {
   relativePath: string;
+  title: SourceFileTitle | null;
 }
 
 function toApiRelativePath(rootPath: string, filePath: string): string {
   return relative(rootPath, filePath);
+}
+
+function resolveTitle(
+  groups: Record<string, string | undefined> | undefined,
+): SourceFileTitle | null {
+  const work = groups?.workTitle;
+  const episode = groups?.episodeTitle;
+  if (work === undefined || episode === undefined) {
+    return null;
+  }
+  return { work, episode };
+}
+
+function findFirstIncludeMatch(
+  relativePath: string,
+  includeRules: SourceRuleRecord[],
+): { matched: boolean; title: SourceFileTitle | null } {
+  for (const rule of includeRules) {
+    const match = new RegExp(rule.pattern).exec(relativePath);
+    if (match !== null) {
+      return { matched: true, title: resolveTitle(match.groups) };
+    }
+  }
+  return { matched: false, title: null };
 }
 
 function matchesAnyPattern(relativePath: string, patterns: string[]): boolean {
@@ -63,7 +94,6 @@ export async function listSourceFiles(db: Db, rootId: string): Promise<SourceFil
   }
 
   const excludeRules = await listSourceExcludeRules(db, rootId);
-  const includePatterns = includeRules.map((rule) => rule.pattern);
   const excludePatterns = excludeRules.map((rule) => rule.pattern);
 
   let filePaths: string[];
@@ -75,11 +105,17 @@ export async function listSourceFiles(db: Db, rootId: string): Promise<SourceFil
 
   return filePaths
     .map((filePath) => toApiRelativePath(root.path, filePath))
+    .map((relativePath) => {
+      const includeMatch = findFirstIncludeMatch(relativePath, includeRules);
+      return { relativePath, includeMatch };
+    })
     .filter(
-      (relativePath) =>
-        matchesAnyPattern(relativePath, includePatterns) &&
-        !matchesAnyPattern(relativePath, excludePatterns),
+      ({ relativePath, includeMatch }) =>
+        includeMatch.matched && !matchesAnyPattern(relativePath, excludePatterns),
     )
-    .sort((a, b) => a.localeCompare(b))
-    .map((relativePath) => ({ relativePath }));
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    .map(({ relativePath, includeMatch }) => ({
+      relativePath,
+      title: includeMatch.title,
+    }));
 }

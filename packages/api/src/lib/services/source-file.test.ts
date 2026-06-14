@@ -45,6 +45,11 @@ function regexPath(directory: string, filePattern: string): string {
   return join(directory) + regexSep + filePattern;
 }
 
+function regexPathWithNamedGroups(workTitlePattern: string, episodeTitlePattern: string): string {
+  const regexSep = sep.replaceAll("\\", "\\\\");
+  return `(?<workTitle>${workTitlePattern})${regexSep}(?<episodeTitle>${episodeTitlePattern})\\.mp4`;
+}
+
 describe("source-file service", () => {
   let db: Db;
   let rootId: string;
@@ -79,7 +84,66 @@ describe("source-file service", () => {
 
     const files = await listSourceFiles(db, rootId);
 
-    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4") }]);
+    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4"), title: null }]);
+  });
+
+  it("named group から title を解決して返す", async () => {
+    const workDir = "〈物語〉シリーズ オフ＆モンスターシーズン";
+    await mkdir(join(tempDir, workDir), { recursive: true });
+    await writeFile(join(tempDir, workDir, "#01 愚物語 つきひアンドゥ.mp4"), "");
+
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
+      sortOrder: 0,
+    });
+
+    const files = await listSourceFiles(db, rootId);
+
+    expect(files).toEqual([
+      {
+        relativePath: join(workDir, "#01 愚物語 つきひアンドゥ.mp4"),
+        title: {
+          work: workDir,
+          episode: "#01 愚物語 つきひアンドゥ",
+        },
+      },
+    ]);
+  });
+
+  it("named group が不足する include rule では title は null になる", async () => {
+    await mkdir(join(tempDir, "Series"), { recursive: true });
+    await writeFile(join(tempDir, "Series", "#01.mp4"), "");
+
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: regexPath("Series", ".*\\.mp4"),
+      sortOrder: 0,
+    });
+
+    const files = await listSourceFiles(db, rootId);
+
+    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4"), title: null }]);
+  });
+
+  it("include rule が複数ある場合は sortOrder が小さい最初のマッチを使う", async () => {
+    await mkdir(join(tempDir, "Series"), { recursive: true });
+    await writeFile(join(tempDir, "Series", "#01.mp4"), "");
+
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: regexPath("Series", ".*\\.mp4"),
+      sortOrder: 0,
+    });
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
+      sortOrder: 1,
+    });
+
+    const files = await listSourceFiles(db, rootId);
+
+    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4"), title: null }]);
   });
 
   it("exclude rule にマッチするファイルは除外する", async () => {
@@ -100,7 +164,7 @@ describe("source-file service", () => {
 
     const files = await listSourceFiles(db, rootId);
 
-    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4") }]);
+    expect(files).toEqual([{ relativePath: join("Series", "#01.mp4"), title: null }]);
   });
 
   it("走査中に読めない配下ディレクトリはスキップして読めるファイルを返す", async () => {
@@ -121,7 +185,7 @@ describe("source-file service", () => {
 
     const files = await listSourceFiles(db, rootId);
 
-    expect(files).toEqual([{ relativePath: join("Readable", "#01.mp4") }]);
+    expect(files).toEqual([{ relativePath: join("Readable", "#01.mp4"), title: null }]);
   });
 
   it("include rule がない root は空配列を返す", async () => {
