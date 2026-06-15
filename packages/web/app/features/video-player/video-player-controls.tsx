@@ -33,6 +33,11 @@ const videoSliderClassName = cn(
   "**:data-[slot=slider-thumb]:size-3 **:data-[slot=slider-thumb]:border-0",
 );
 
+const videoControlsOverlayClassName = cn(
+  "from-black/60 from-0% via-black/15 via-55% to-transparent to-100%",
+  "h-48 px-4 sm:px-6",
+);
+
 const filledIconProps = {
   fill: "currentColor",
   strokeWidth: 0,
@@ -122,12 +127,13 @@ export function VideoPlayerControls({
     >
       <div
         className={cn(
-          "bg-linear-to-b from-black/80 to-transparent p-4 sm:p-6",
+          "bg-linear-to-b",
+          videoControlsOverlayClassName,
           showControls && "pointer-events-auto",
         )}
         data-video-control=""
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3 mt-6">
           <Button
             asChild
             aria-label="作品詳細に戻る"
@@ -150,12 +156,13 @@ export function VideoPlayerControls({
 
       <div
         className={cn(
-          "bg-linear-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-6",
+          "bg-linear-to-t grid",
+          videoControlsOverlayClassName,
           showControls && "pointer-events-auto",
         )}
         data-video-control=""
       >
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1 place-self-end w-full mb-4">
           <div className="px-1.5">
             <Slider
               aria-label="再生位置"
