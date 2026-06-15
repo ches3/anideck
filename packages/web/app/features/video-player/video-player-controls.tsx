@@ -30,7 +30,7 @@ const videoSliderClassName = cn(
   "min-h-6 items-center",
   "**:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/30",
   "**:data-[slot=slider-range]:bg-white/90",
-  "**:data-[slot=slider-thumb]:size-3",
+  "**:data-[slot=slider-thumb]:size-3 **:data-[slot=slider-thumb]:border-0",
 );
 
 const filledIconProps = {
