@@ -128,6 +128,39 @@ describe("getWork", () => {
     });
   });
 
+  it("episodes を title の localeCompare（numeric）でソートして返す", async () => {
+    const workId = createWorkId("Series A");
+    vi.mocked(listSourceRoots).mockResolvedValue([
+      { id: "ROOT1", path: "/media/b" },
+      { id: "ROOT2", path: "/media/a" },
+    ]);
+    vi.mocked(listSourceFiles)
+      .mockResolvedValueOnce([
+        {
+          relativePath: "Series A/#02.mp4",
+          title: { work: "Series A", episode: "#02" },
+        },
+        {
+          relativePath: "Series A/#10.mp4",
+          title: { work: "Series A", episode: "#10" },
+        },
+        {
+          relativePath: "Series A/#2.mp4",
+          title: { work: "Series A", episode: "#2" },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          relativePath: "Series A/#01.mp4",
+          title: { work: "Series A", episode: "#01" },
+        },
+      ]);
+
+    const work = await getWork(db, workId);
+
+    expect(work.episodes.map((episode) => episode.title)).toEqual(["#01", "#02", "#2", "#10"]);
+  });
+
   it("title が解決できないファイルは episodes から除外する", async () => {
     const workId = createWorkId("Series A");
     vi.mocked(listSourceRoots).mockResolvedValue([{ id: "ROOT1", path: "/media/anime" }]);

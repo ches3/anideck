@@ -87,7 +87,7 @@ function toWorkDetail(files: ResolvedSourceFile[], workId: string): WorkDetail {
         title: file.episodeTitle,
         path: join(file.rootPath, file.relativePath),
       }))
-      .sort((a, b) => a.path.localeCompare(b.path)),
+      .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
   };
 }
 
