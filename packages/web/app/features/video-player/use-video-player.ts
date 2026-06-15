@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+
+import {
+  readVideoPlayerVolumePreference,
+  writeVideoPlayerVolumePreference,
+} from "./volume-preference";
 
 const OVERLAY_HIDE_DELAY_MS = 2000;
 const CENTER_FEEDBACK_HOLD_MS = 400;
@@ -131,10 +136,12 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
     }
 
     const clampedVolume = Math.min(Math.max(nextVolume, 0), 1);
+    const muted = clampedVolume === 0;
     video.volume = clampedVolume;
-    video.muted = clampedVolume === 0;
+    video.muted = muted;
     setVolume(clampedVolume);
-    setIsMuted(clampedVolume === 0);
+    setIsMuted(muted);
+    writeVideoPlayerVolumePreference({ volume: clampedVolume, muted });
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -149,6 +156,7 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
       video.volume = 1;
       setVolume(1);
     }
+    writeVideoPlayerVolumePreference({ volume: video.volume, muted: video.muted });
   }, []);
 
   const toggleFullscreen = useCallback(async () => {
@@ -169,10 +177,18 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const video = videoRef.current;
     if (!video) {
       return;
+    }
+
+    const preference = readVideoPlayerVolumePreference();
+    if (preference) {
+      video.volume = preference.volume;
+      video.muted = preference.muted;
+      setVolume(preference.volume);
+      setIsMuted(preference.muted);
     }
 
     const handleLoadedMetadata = () => {
@@ -230,7 +246,8 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
     }
 
     void play();
-  }, [autoPlay, play]);
+    onUserActivity();
+  }, [autoPlay, onUserActivity, play]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

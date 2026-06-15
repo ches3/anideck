@@ -2,6 +2,10 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useVideoPlayer } from "./use-video-player";
+import {
+  writeVideoPlayerVolumePreference,
+  readVideoPlayerVolumePreference,
+} from "./volume-preference";
 
 const SEEK_STEP_SECONDS = 10;
 
@@ -78,6 +82,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  window.localStorage.clear();
 });
 
 describe("useVideoPlayer", () => {
@@ -85,6 +90,7 @@ describe("useVideoPlayer", () => {
   let pauseSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    window.localStorage.clear();
     playSpy = vi
       .spyOn(HTMLMediaElement.prototype, "play")
       .mockImplementation(function (this: HTMLMediaElement) {
@@ -281,6 +287,40 @@ describe("useVideoPlayer", () => {
       expect(video.volume).toBe(0.5);
       expect(getHook().isMuted).toBe(false);
       expect(getHook().volume).toBe(0.5);
+    });
+  });
+
+  describe("音量設定の永続化", () => {
+    it("localStorage に保存済みの設定がある場合、マウント直後に反映される", () => {
+      writeVideoPlayerVolumePreference({ volume: 0.3, muted: true });
+
+      const { getHook, video } = renderUseVideoPlayer();
+
+      expect(video.volume).toBe(0.3);
+      expect(video.muted).toBe(true);
+      expect(getHook().volume).toBe(0.3);
+      expect(getHook().isMuted).toBe(true);
+    });
+
+    it("setVideoVolume() 実行時に localStorage に保存される", () => {
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().setVideoVolume(0.7);
+      });
+
+      expect(readVideoPlayerVolumePreference()).toEqual({ volume: 0.7, muted: false });
+    });
+
+    it("toggleMute() 実行時に localStorage に保存される", () => {
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().setVideoVolume(0.5);
+        getHook().toggleMute();
+      });
+
+      expect(readVideoPlayerVolumePreference()).toEqual({ volume: 0.5, muted: true });
     });
   });
 
