@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { createWorkNotFoundError } from "../../errors/index.ts";
+import { createEpisodeNotFoundError, createWorkNotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
 import { createEpisodeId, createWorkId } from "../work-id.ts";
 import { listSourceFiles } from "./source-file.ts";
@@ -19,6 +19,11 @@ export interface WorkEpisode {
 
 export interface WorkDetail extends WorkSummary {
   episodes: WorkEpisode[];
+}
+
+export interface WorkEpisodeDetail {
+  work: WorkSummary;
+  episode: WorkEpisode;
 }
 
 interface ResolvedSourceFile {
@@ -91,6 +96,34 @@ function toWorkDetail(files: ResolvedSourceFile[], workId: string): WorkDetail {
   };
 }
 
+function toWorkEpisodeDetail(
+  files: ResolvedSourceFile[],
+  workId: string,
+  episodeId: string,
+): WorkEpisodeDetail {
+  const matchingFile = files.find(
+    (file) =>
+      createWorkId(file.workTitle) === workId &&
+      createEpisodeId(file.rootId, file.relativePath) === episodeId,
+  );
+
+  if (!matchingFile) {
+    throw createEpisodeNotFoundError(workId, episodeId);
+  }
+
+  return {
+    work: {
+      id: workId,
+      title: matchingFile.workTitle,
+    },
+    episode: {
+      id: episodeId,
+      title: matchingFile.episodeTitle,
+      path: join(matchingFile.rootPath, matchingFile.relativePath),
+    },
+  };
+}
+
 export async function listWorks(db: Db): Promise<WorkSummary[]> {
   const files = await listResolvedSourceFiles(db);
   return toWorkSummaries(files);
@@ -99,4 +132,13 @@ export async function listWorks(db: Db): Promise<WorkSummary[]> {
 export async function getWork(db: Db, workId: string): Promise<WorkDetail> {
   const files = await listResolvedSourceFiles(db);
   return toWorkDetail(files, workId);
+}
+
+export async function getWorkEpisode(
+  db: Db,
+  workId: string,
+  episodeId: string,
+): Promise<WorkEpisodeDetail> {
+  const files = await listResolvedSourceFiles(db);
+  return toWorkEpisodeDetail(files, workId, episodeId);
 }

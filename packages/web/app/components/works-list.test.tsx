@@ -1,18 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
 import { WorksList } from "./works-list";
 
 describe("WorksList", () => {
-  test("作品がない場合は空状態を表示する", () => {
+  it("作品がない場合は空状態が表示される", () => {
     render(<WorksList works={[]} />);
 
     expect(screen.getByText("作品がまだありません")).toBeDefined();
     expect(screen.getByText(/ソースフォルダと取り込みルール/)).toBeDefined();
   });
 
-  test("作品がある場合はカードリンクを表示する", () => {
+  it("作品がある場合はカードリンクが表示される", () => {
     render(
       <MemoryRouter>
         <WorksList works={[{ id: "work-1", title: "ぼっち・ざ・ろっく!" }]} />

@@ -41,6 +41,13 @@ export function createWorkNotFoundError(workId?: string) {
   return new NotFoundError("work が見つかりません", workId !== undefined ? { workId } : undefined);
 }
 
+export function createEpisodeNotFoundError(workId?: string, episodeId?: string) {
+  return new NotFoundError(
+    "episode が見つかりません",
+    workId !== undefined || episodeId !== undefined ? { workId, episodeId } : undefined,
+  );
+}
+
 export function createDuplicatePatternError(pattern: string) {
   return new ConflictError("同一のルールが既に存在します", {
     pattern,

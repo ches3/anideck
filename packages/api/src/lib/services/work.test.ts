@@ -8,7 +8,7 @@ import { createTestDb } from "../db/test-helper.ts";
 import { createEpisodeId, createWorkId } from "../work-id.ts";
 import { listSourceFiles } from "./source-file.ts";
 import { listSourceRoots } from "./source-root.ts";
-import { getWork, listWorks } from "./work.ts";
+import { getWork, getWorkEpisode, listWorks } from "./work.ts";
 
 vi.mock("./source-root.ts");
 vi.mock("./source-file.ts");
@@ -191,5 +191,96 @@ describe("getWork", () => {
     ]);
 
     await expect(getWork(db, "missing-work-id")).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe("getWorkEpisode", () => {
+  let db: Db;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    ({ db } = await createTestDb());
+  });
+
+  it("指定した workId と episodeId に一致する episode を返す", async () => {
+    const workId = createWorkId("Series A");
+    const episodeId = createEpisodeId("ROOT1", "Series A/#01.mp4");
+    vi.mocked(listSourceRoots).mockResolvedValue([{ id: "ROOT1", path: "/media/anime1" }]);
+    vi.mocked(listSourceFiles).mockResolvedValue([
+      {
+        relativePath: "Series A/#01.mp4",
+        title: { work: "Series A", episode: "#01" },
+      },
+      {
+        relativePath: "Series B/#01.mp4",
+        title: { work: "Series B", episode: "#01" },
+      },
+    ]);
+
+    const detail = await getWorkEpisode(db, workId, episodeId);
+
+    expect(detail).toEqual({
+      work: { id: workId, title: "Series A" },
+      episode: {
+        id: episodeId,
+        title: "#01",
+        path: join("/media/anime1", "Series A/#01.mp4"),
+      },
+    });
+  });
+
+  it("root と relativePath が異なれば同じ episode title でも別 episode として取得できる", async () => {
+    const workId = createWorkId("Series A");
+    const episodeIdRoot2 = createEpisodeId("ROOT2", "Series A/#01.mp4");
+    vi.mocked(listSourceRoots).mockResolvedValue([
+      { id: "ROOT1", path: "/media/anime1" },
+      { id: "ROOT2", path: "/media/anime2" },
+    ]);
+    vi.mocked(listSourceFiles)
+      .mockResolvedValueOnce([
+        {
+          relativePath: "Series A/#01.mp4",
+          title: { work: "Series A", episode: "#01" },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          relativePath: "Series A/#01.mp4",
+          title: { work: "Series A", episode: "#01" },
+        },
+      ]);
+
+    const detail = await getWorkEpisode(db, workId, episodeIdRoot2);
+
+    expect(detail.episode.path).toBe(join("/media/anime2", "Series A/#01.mp4"));
+  });
+
+  it("指定 work に属さない episodeId の取得は NotFoundError を投げる", async () => {
+    const workId = createWorkId("Series A");
+    const episodeId = createEpisodeId("ROOT1", "Series B/#01.mp4");
+    vi.mocked(listSourceRoots).mockResolvedValue([{ id: "ROOT1", path: "/media/anime" }]);
+    vi.mocked(listSourceFiles).mockResolvedValue([
+      {
+        relativePath: "Series B/#01.mp4",
+        title: { work: "Series B", episode: "#01" },
+      },
+    ]);
+
+    await expect(getWorkEpisode(db, workId, episodeId)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("存在しない episodeId の取得は NotFoundError を投げる", async () => {
+    const workId = createWorkId("Series A");
+    vi.mocked(listSourceRoots).mockResolvedValue([{ id: "ROOT1", path: "/media/anime" }]);
+    vi.mocked(listSourceFiles).mockResolvedValue([
+      {
+        relativePath: "Series A/#01.mp4",
+        title: { work: "Series A", episode: "#01" },
+      },
+    ]);
+
+    await expect(getWorkEpisode(db, workId, "missing-episode-id")).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 });

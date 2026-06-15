@@ -73,7 +73,7 @@ export default function WorkDetail({ loaderData }: Route.ComponentProps) {
               {work.episodes.length} 話
             </DialogDescription>
           </DialogHeader>
-          <WorkEpisodesPanel episodes={work.episodes} />
+          <WorkEpisodesPanel workId={work.id} episodes={work.episodes} />
         </div>
       </DialogContent>
     </Dialog>
