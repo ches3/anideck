@@ -32,10 +32,12 @@ const videoSliderClassName = cn(
   "**:data-[slot=slider-thumb]:size-3 **:data-[slot=slider-thumb]:border-0",
 );
 
-const videoControlsOverlayClassName = cn(
+const videoControlsGradientClassName = cn(
   "from-black/60 from-0% via-black/15 via-55% to-transparent to-100%",
-  "h-48 px-4 sm:px-6",
+  "h-48",
 );
+
+const videoControlsPaddingClassName = "px-4 sm:px-6";
 
 const filledIconProps = {
   fill: "currentColor",
@@ -99,150 +101,170 @@ export function VideoPlayerControls({
         showControls ? "opacity-100" : "opacity-0",
       )}
     >
-      <div
-        className={cn(
-          "bg-linear-to-b",
-          videoControlsOverlayClassName,
-          showControls && "pointer-events-auto",
-        )}
-        data-video-control=""
-      >
-        <div className="flex items-start gap-3 mt-6">
-          <Button
-            asChild
-            aria-label="作品詳細に戻る"
-            className={videoButtonClassName}
-            size="icon"
-            variant="ghost"
-          >
-            <Link to={backHref}>
-              <ArrowLeftIcon className={videoIconClassName} {...thickIconProps} />
-            </Link>
-          </Button>
-          <div className="min-w-0 pt-1">
-            <p className="truncate text-sm text-neutral-300">{workTitle}</p>
-            <h1 className="truncate text-lg font-medium text-neutral-50 sm:text-xl">
-              {episodeTitle}
-            </h1>
+      <div className="relative shrink-0">
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-0 top-0 bg-linear-to-b",
+            videoControlsGradientClassName,
+          )}
+        />
+        <div
+          className={cn(
+            "relative flex flex-col",
+            videoControlsPaddingClassName,
+            "py-6 pb-4",
+            showControls && "pointer-events-auto",
+          )}
+          data-video-control=""
+        >
+          <div className="flex items-start gap-3">
+            <Button
+              asChild
+              aria-label="作品詳細に戻る"
+              className={videoButtonClassName}
+              size="icon"
+              variant="ghost"
+            >
+              <Link to={backHref}>
+                <ArrowLeftIcon className={videoIconClassName} {...thickIconProps} />
+              </Link>
+            </Button>
+            <div className="min-w-0 pt-1">
+              <p className="truncate text-sm text-neutral-300">{workTitle}</p>
+              <h1 className="truncate text-lg font-medium text-neutral-50 sm:text-xl">
+                {episodeTitle}
+              </h1>
+            </div>
           </div>
         </div>
       </div>
 
-      <div
-        className={cn(
-          "bg-linear-to-t grid",
-          videoControlsOverlayClassName,
-          showControls && "pointer-events-auto",
-        )}
-        data-video-control=""
-      >
-        <div className="flex min-w-0 flex-col gap-1 place-self-end w-full mb-4">
-          <div className="px-1.5">
-            <Slider
-              aria-label="再生位置"
-              className={videoSliderClassName}
-              max={duration > 0 ? duration : 100}
-              min={0}
-              onPointerCancel={() => {
-                setPreviewSeekTime(null);
-              }}
-              onPointerUp={() => {
-                setPreviewSeekTime(null);
-              }}
-              onValueChange={(values) => {
-                setPreviewSeekTime(values[0] ?? 0);
-              }}
-              onValueCommit={(values) => {
-                setPreviewSeekTime(null);
-                onSeek(values[0] ?? 0);
-              }}
-              step={0.1}
-              value={[seekTime]}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex items-center gap-0.5 sm:gap-1">
-              <Button
-                aria-label={isPlaying ? "一時停止" : "再生"}
-                className={videoButtonClassName}
-                onClick={onTogglePlay}
-                size="icon"
-                variant="ghost"
-              >
-                {isPlaying ? (
-                  <PauseIcon className={videoIconClassName} {...filledIconProps} />
-                ) : (
-                  <PlayIcon className={videoIconClassName} {...filledIconProps} />
-                )}
-              </Button>
-              <Button
-                aria-label={`${seekStepSeconds}秒戻る`}
-                className={videoButtonClassName}
-                onClick={onSkipBackward}
-                size="icon"
-                variant="ghost"
-              >
-                <SkipSecondsIcon
-                  className="size-8"
-                  direction="backward"
-                  seekStepSeconds={seekStepSeconds}
-                />
-              </Button>
-              <Button
-                aria-label={`${seekStepSeconds}秒進む`}
-                className={videoButtonClassName}
-                onClick={onSkipForward}
-                size="icon"
-                variant="ghost"
-              >
-                <SkipSecondsIcon
-                  className="size-8"
-                  direction="forward"
-                  seekStepSeconds={seekStepSeconds}
-                />
-              </Button>
-              <Button
-                aria-label={isMuted ? "ミュート解除" : "ミュート"}
-                className={videoButtonClassName}
-                onClick={onToggleMute}
-                size="icon"
-                variant="ghost"
-              >
-                {isMuted || volume === 0 ? (
-                  <VolumeXIcon className={videoIconClassName} {...thickIconProps} />
-                ) : (
-                  <Volume2Icon className={videoIconClassName} {...thickIconProps} />
-                )}
-              </Button>
+      <div className="relative shrink-0">
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t",
+            videoControlsGradientClassName,
+          )}
+        />
+        <div
+          className={cn(
+            "relative grid",
+            videoControlsPaddingClassName,
+            "pt-4 pb-4",
+            showControls && "pointer-events-auto",
+          )}
+          data-video-control=""
+        >
+          <div className="flex min-w-0 flex-col gap-1 place-self-end w-full">
+            <div className="px-1.5">
               <Slider
-                aria-label="音量"
-                className={cn(videoSliderClassName, "hidden w-20 sm:flex")}
-                max={1}
+                aria-label="再生位置"
+                className={videoSliderClassName}
+                max={duration > 0 ? duration : 100}
                 min={0}
-                onValueChange={(values) => {
-                  onVolumeChange(values[0] ?? 0);
+                onPointerCancel={() => {
+                  setPreviewSeekTime(null);
                 }}
-                step={0.01}
-                value={[volumeValue]}
+                onPointerUp={() => {
+                  setPreviewSeekTime(null);
+                }}
+                onValueChange={(values) => {
+                  setPreviewSeekTime(values[0] ?? 0);
+                }}
+                onValueCommit={(values) => {
+                  setPreviewSeekTime(null);
+                  onSeek(values[0] ?? 0);
+                }}
+                step={0.1}
+                value={[seekTime]}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-neutral-300 tabular-nums">
-                {formatDuration(currentTime)} / {formatDuration(duration)}
-              </span>
-              <Button
-                aria-label={isFullscreen ? "フルスクリーン解除" : "フルスクリーン"}
-                className={videoButtonClassName}
-                onClick={onToggleFullscreen}
-                size="icon"
-                variant="ghost"
-              >
-                {isFullscreen ? (
-                  <MinimizeIcon className={videoIconClassName} {...thickIconProps} />
-                ) : (
-                  <MaximizeIcon className={videoIconClassName} {...thickIconProps} />
-                )}
-              </Button>
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <Button
+                  aria-label={isPlaying ? "一時停止" : "再生"}
+                  className={videoButtonClassName}
+                  onClick={onTogglePlay}
+                  size="icon"
+                  variant="ghost"
+                >
+                  {isPlaying ? (
+                    <PauseIcon className={videoIconClassName} {...filledIconProps} />
+                  ) : (
+                    <PlayIcon className={videoIconClassName} {...filledIconProps} />
+                  )}
+                </Button>
+                <Button
+                  aria-label={`${seekStepSeconds}秒戻る`}
+                  className={videoButtonClassName}
+                  onClick={onSkipBackward}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <SkipSecondsIcon
+                    className="size-8"
+                    direction="backward"
+                    seekStepSeconds={seekStepSeconds}
+                  />
+                </Button>
+                <Button
+                  aria-label={`${seekStepSeconds}秒進む`}
+                  className={videoButtonClassName}
+                  onClick={onSkipForward}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <SkipSecondsIcon
+                    className="size-8"
+                    direction="forward"
+                    seekStepSeconds={seekStepSeconds}
+                  />
+                </Button>
+                <Button
+                  aria-label={isMuted ? "ミュート解除" : "ミュート"}
+                  className={videoButtonClassName}
+                  onClick={onToggleMute}
+                  size="icon"
+                  variant="ghost"
+                >
+                  {isMuted || volume === 0 ? (
+                    <VolumeXIcon className={videoIconClassName} {...thickIconProps} />
+                  ) : (
+                    <Volume2Icon className={videoIconClassName} {...thickIconProps} />
+                  )}
+                </Button>
+                <Slider
+                  aria-label="音量"
+                  className={cn(videoSliderClassName, "hidden w-20 sm:flex")}
+                  max={1}
+                  min={0}
+                  onValueChange={(values) => {
+                    onVolumeChange(values[0] ?? 0);
+                  }}
+                  step={0.01}
+                  value={[volumeValue]}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-neutral-300 tabular-nums">
+                  {formatDuration(currentTime)} / {formatDuration(duration)}
+                </span>
+                <Button
+                  aria-label={isFullscreen ? "フルスクリーン解除" : "フルスクリーン"}
+                  className={videoButtonClassName}
+                  onClick={onToggleFullscreen}
+                  size="icon"
+                  variant="ghost"
+                >
+                  {isFullscreen ? (
+                    <MinimizeIcon className={videoIconClassName} {...thickIconProps} />
+                  ) : (
+                    <MaximizeIcon className={videoIconClassName} {...thickIconProps} />
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
