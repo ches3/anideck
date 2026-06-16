@@ -31,7 +31,11 @@ export const worksRoute = new Hono<ApiEnv>()
     const workId = c.req.param("workId");
     const episodeId = c.req.param("episodeId");
     const detail = await getWorkEpisode(db, workId, episodeId);
-    const result = await createVideoStreamResponse(detail.episode.path, c.req.header("range"));
+    const result = await createVideoStreamResponse(
+      detail.episode.path,
+      c.req.header("range"),
+      c.req.raw.signal,
+    );
 
     switch (result.status) {
       case 416:

@@ -1,9 +1,18 @@
 import type { ReadStream } from "node:fs";
-import type { FileHandle } from "node:fs/promises";
-import { open } from "node:fs/promises";
+import {
+  close as closeFileDescriptorCallback,
+  createReadStream,
+  fstat as fstatCallback,
+  open as openFileDescriptorCallback,
+} from "node:fs";
 import { extname } from "node:path";
+import { promisify } from "node:util";
 
 import { BadRequestError, InternalError, NotFoundError } from "../errors/index.ts";
+
+const openFileDescriptor = promisify(openFileDescriptorCallback);
+const fstatFileDescriptor = promisify(fstatCallback);
+const closeFileDescriptor = promisify(closeFileDescriptorCallback);
 
 interface ByteRange {
   start: number;
@@ -13,7 +22,7 @@ interface ByteRange {
 type ParsedByteRange = ByteRange | "invalid" | "unsupported";
 
 interface OpenVideoFile {
-  fileHandle: FileHandle;
+  fileDescriptor: number;
   fileSize: number;
 }
 
@@ -33,25 +42,26 @@ function createVideoFileError(error: unknown, filePath: string) {
 }
 
 async function openVideoFile(filePath: string): Promise<OpenVideoFile> {
-  let fileHandle: FileHandle;
+  let fileDescriptor: number;
+
   try {
-    fileHandle = await open(filePath, "r");
+    fileDescriptor = await openFileDescriptor(filePath, "r");
   } catch (error) {
     throw createVideoFileError(error, filePath);
   }
 
   try {
-    const stats = await fileHandle.stat();
+    const stats = await fstatFileDescriptor(fileDescriptor);
     if (!stats.isFile()) {
       throw new BadRequestError("動画ファイルを読み取れません", { path: filePath });
     }
 
     return {
-      fileHandle,
+      fileDescriptor,
       fileSize: stats.size,
     };
   } catch (error) {
-    await fileHandle.close().catch(() => {});
+    await closeFileDescriptor(fileDescriptor).catch(() => {});
     if (error instanceof BadRequestError) {
       throw error;
     }
@@ -59,28 +69,107 @@ async function openVideoFile(filePath: string): Promise<OpenVideoFile> {
   }
 }
 
-function fileStreamToWebStream(nodeStream: ReadStream): ReadableStream<Uint8Array> {
+function readStreamToWebStream(
+  nodeStream: ReadStream,
+  onClose: () => Promise<void>,
+  signal?: AbortSignal,
+): ReadableStream<Uint8Array> {
   const iterator = nodeStream[Symbol.asyncIterator]();
+  let closed = false;
+  let aborted = false;
+  let removeAbortListener: (() => void) | undefined;
+
+  async function close() {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    removeAbortListener?.();
+    await onClose();
+  }
+
+  function isAborted() {
+    return aborted;
+  }
 
   return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const result = await iterator.next();
-      if (result.done === true) {
-        controller.close();
+    start() {
+      if (signal === undefined) {
         return;
       }
 
-      const chunk: unknown = result.value;
-      if (!(chunk instanceof Uint8Array)) {
-        throw new TypeError("動画ストリームから byte chunk 以外が返されました");
+      const abort = () => {
+        aborted = true;
+        nodeStream.destroy();
+        void close();
+      };
+
+      if (signal.aborted) {
+        abort();
+        return;
       }
 
-      controller.enqueue(chunk);
+      signal.addEventListener("abort", abort, { once: true });
+      removeAbortListener = () => {
+        signal.removeEventListener("abort", abort);
+      };
     },
-    cancel() {
+    async pull(controller) {
+      if (isAborted()) {
+        controller.close();
+        await close();
+        return;
+      }
+
+      try {
+        const result = await iterator.next();
+        if (isAborted()) {
+          controller.close();
+          await close();
+          return;
+        }
+
+        if (result.done === true) {
+          controller.close();
+          await close();
+          return;
+        }
+
+        const chunk: unknown = result.value;
+        if (!(chunk instanceof Uint8Array)) {
+          throw new TypeError("動画ストリームから byte chunk 以外が返されました");
+        }
+
+        controller.enqueue(chunk);
+      } catch (error) {
+        await close().catch(() => {});
+        if (isAborted()) {
+          controller.close();
+          return;
+        }
+        throw error;
+      }
+    },
+    async cancel() {
       nodeStream.destroy();
+      await close();
     },
   });
+}
+
+function createBodyStream(
+  filePath: string,
+  fileDescriptor: number,
+  options?: { range?: ByteRange; signal?: AbortSignal },
+) {
+  const nodeStream = createReadStream(filePath, {
+    fd: fileDescriptor,
+    autoClose: true,
+    ...(options?.range !== undefined ? { start: options.range.start, end: options.range.end } : {}),
+  });
+
+  return readStreamToWebStream(nodeStream, async () => {}, options?.signal);
 }
 
 export function getVideoContentType(filePath: string): string {
@@ -152,77 +241,64 @@ export function parseByteRange(rangeHeader: string, fileSize: number): ParsedByt
   };
 }
 
-export async function createVideoStreamResponse(filePath: string, rangeHeader: string | undefined) {
-  const { fileHandle, fileSize } = await openVideoFile(filePath);
-  let handedOffToStream = false;
+export async function createVideoStreamResponse(
+  filePath: string,
+  rangeHeader: string | undefined,
+  signal?: AbortSignal,
+) {
+  const { fileDescriptor, fileSize } = await openVideoFile(filePath);
   const contentType = getVideoContentType(filePath);
   const baseHeaders = {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
   };
 
-  try {
-    if (rangeHeader === undefined) {
-      const stream = fileHandle.createReadStream();
-      handedOffToStream = true;
-
-      return {
-        status: 200 as const,
-        headers: {
-          ...baseHeaders,
-          "Content-Length": String(fileSize),
-        },
-        body: fileStreamToWebStream(stream),
-      };
-    }
-
-    const range = parseByteRange(rangeHeader, fileSize);
-    if (range === "invalid") {
-      return {
-        status: 416 as const,
-        headers: {
-          ...baseHeaders,
-          "Content-Range": `bytes */${fileSize}`,
-        },
-        body: null,
-      };
-    }
-
-    if (range === "unsupported") {
-      const stream = fileHandle.createReadStream();
-      handedOffToStream = true;
-
-      return {
-        status: 200 as const,
-        headers: {
-          ...baseHeaders,
-          "Content-Length": String(fileSize),
-        },
-        body: fileStreamToWebStream(stream),
-      };
-    }
-
-    const contentLength = range.end - range.start + 1;
-    const stream = fileHandle.createReadStream({
-      start: range.start,
-      end: range.end,
-    });
-    handedOffToStream = true;
-
+  if (rangeHeader === undefined) {
     return {
-      status: 206 as const,
+      status: 200 as const,
       headers: {
         ...baseHeaders,
-        "Content-Length": String(contentLength),
-        "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+        "Content-Length": String(fileSize),
       },
-      body: fileStreamToWebStream(stream),
+      body: createBodyStream(filePath, fileDescriptor, { signal }),
     };
-  } finally {
-    if (!handedOffToStream) {
-      await fileHandle.close().catch(() => {});
-    }
   }
+
+  const range = parseByteRange(rangeHeader, fileSize);
+  if (range === "invalid") {
+    await closeFileDescriptor(fileDescriptor).catch(() => {});
+    return {
+      status: 416 as const,
+      headers: {
+        ...baseHeaders,
+        "Content-Range": `bytes */${fileSize}`,
+      },
+      body: null,
+    };
+  }
+
+  if (range === "unsupported") {
+    return {
+      status: 200 as const,
+      headers: {
+        ...baseHeaders,
+        "Content-Length": String(fileSize),
+      },
+      body: createBodyStream(filePath, fileDescriptor, { signal }),
+    };
+  }
+
+  const contentLength = range.end - range.start + 1;
+
+  return {
+    status: 206 as const,
+    headers: {
+      ...baseHeaders,
+      "Content-Length": String(contentLength),
+      "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+    },
+    body: createBodyStream(filePath, fileDescriptor, { range, signal }),
+  };
 }
 
 export type VideoStreamResponse = Awaited<ReturnType<typeof createVideoStreamResponse>>;
