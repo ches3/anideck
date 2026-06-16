@@ -7,6 +7,7 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
 
 import { Button } from "~/components/ui/button";
@@ -87,6 +88,8 @@ export function VideoPlayerControls({
   onToggleMute,
   onToggleFullscreen,
 }: VideoPlayerControlsProps) {
+  const [previewSeekTime, setPreviewSeekTime] = useState<number | null>(null);
+  const seekTime = previewSeekTime ?? currentTime;
   const volumeValue = isMuted ? 0 : volume;
 
   return (
@@ -140,11 +143,21 @@ export function VideoPlayerControls({
               className={videoSliderClassName}
               max={duration > 0 ? duration : 100}
               min={0}
+              onPointerCancel={() => {
+                setPreviewSeekTime(null);
+              }}
+              onPointerUp={() => {
+                setPreviewSeekTime(null);
+              }}
               onValueChange={(values) => {
+                setPreviewSeekTime(values[0] ?? 0);
+              }}
+              onValueCommit={(values) => {
+                setPreviewSeekTime(null);
                 onSeek(values[0] ?? 0);
               }}
               step={0.1}
-              value={[currentTime]}
+              value={[seekTime]}
             />
           </div>
           <div className="flex items-center justify-between gap-2 sm:gap-3">

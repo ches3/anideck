@@ -4,6 +4,64 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { VideoPlayerControls, type VideoPlayerControlsProps } from "./video-player-controls";
 
+vi.mock("~/components/ui/slider", () => {
+  const interactionStartValues = new Map<string, number>();
+
+  return {
+    Slider({
+      "aria-label": ariaLabel,
+      onPointerCancel,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onValueChange,
+      onValueCommit,
+      value,
+    }: {
+      "aria-label"?: string;
+      onPointerCancel?: () => void;
+      onPointerDown?: () => void;
+      onPointerMove?: () => void;
+      onPointerUp?: () => void;
+      onValueChange?: (values: number[]) => void;
+      onValueCommit?: (values: number[]) => void;
+      value?: number[];
+    }) {
+      const currentValue = value?.[0] ?? 0;
+      const sliderKey = ariaLabel ?? "";
+
+      return (
+        <button
+          aria-label={ariaLabel}
+          aria-valuenow={currentValue}
+          onPointerCancel={() => {
+            onPointerCancel?.();
+          }}
+          onPointerDown={() => {
+            interactionStartValues.set(sliderKey, currentValue);
+            onPointerDown?.();
+          }}
+          onPointerMove={() => {
+            onPointerMove?.();
+            onValueChange?.([42]);
+          }}
+          onPointerUp={() => {
+            const startValue = interactionStartValues.get(sliderKey) ?? currentValue;
+
+            onPointerUp?.();
+
+            if (currentValue !== startValue) {
+              onValueCommit?.([currentValue]);
+            }
+          }}
+          role="slider"
+          type="button"
+        />
+      );
+    },
+  };
+});
+
 function createControlsProps(
   overrides: Partial<VideoPlayerControlsProps> = {},
 ): VideoPlayerControlsProps {
@@ -153,6 +211,40 @@ describe("VideoPlayerControls", () => {
     expect(props.onSkipForward).toHaveBeenCalledTimes(1);
     expect(props.onToggleMute).toHaveBeenCalledTimes(1);
     expect(props.onToggleFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("シークバーのドラッグ中は onSeek() が呼ばれない", () => {
+    const props = renderControls({ currentTime: 30, duration: 120 });
+    const seekSlider = screen.getByRole("slider", { name: "再生位置" });
+
+    fireEvent.pointerDown(seekSlider);
+    fireEvent.pointerMove(seekSlider);
+
+    expect(props.onSeek).not.toHaveBeenCalled();
+    expect(screen.getByRole("slider", { name: "再生位置" }).getAttribute("aria-valuenow")).toBe(
+      "42",
+    );
+  });
+
+  it("シークバーのドラッグ完了時に onSeek() が呼ばれる", () => {
+    const props = renderControls({ currentTime: 30, duration: 120 });
+    const seekSlider = screen.getByRole("slider", { name: "再生位置" });
+
+    fireEvent.pointerDown(seekSlider);
+    fireEvent.pointerMove(seekSlider);
+    fireEvent.pointerUp(seekSlider);
+
+    expect(props.onSeek).toHaveBeenCalledTimes(1);
+    expect(props.onSeek).toHaveBeenCalledWith(42);
+  });
+
+  it("音量バーのドラッグ中は onVolumeChange() が呼ばれる", () => {
+    const props = renderControls({ volume: 0.5 });
+
+    fireEvent.pointerMove(screen.getByRole("slider", { name: "音量" }));
+
+    expect(props.onVolumeChange).toHaveBeenCalledTimes(1);
+    expect(props.onVolumeChange).toHaveBeenCalledWith(42);
   });
 
   it("コントロール非表示時は操作を受け付けない", () => {
