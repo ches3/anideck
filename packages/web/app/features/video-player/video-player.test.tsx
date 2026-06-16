@@ -4,6 +4,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { VideoPlayer } from "./video-player";
 
+const DOUBLE_CLICK_THRESHOLD_MS = 200;
+
+function getPlayer(container: HTMLElement) {
+  const player = container.firstElementChild;
+  if (!(player instanceof HTMLElement)) {
+    throw new Error("プレイヤーが見つかりません");
+  }
+
+  return player;
+}
+
+function advanceSingleClickDelay() {
+  act(() => {
+    vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS);
+  });
+}
+
+function createPointerUpEvent(pointerType: "mouse" | "touch", options?: { button?: number }) {
+  const event = new PointerEvent("pointerup", {
+    bubbles: true,
+    button: options?.button ?? 0,
+    cancelable: true,
+  });
+  Object.defineProperty(event, "pointerType", {
+    configurable: true,
+    value: pointerType,
+  });
+
+  return event;
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -62,7 +93,9 @@ describe("VideoPlayer", () => {
     expect(video?.getAttribute("src")).toBe("/stream/test.mp4");
   });
 
-  it("動画領域をクリックすると再生/一時停止が切り替わり、フィードバックが表示される", () => {
+  it("クリックすると再生/一時停止が切り替わり、フィードバックが表示される", () => {
+    vi.useFakeTimers();
+
     const { container } = render(
       <MemoryRouter>
         <VideoPlayer
@@ -74,17 +107,16 @@ describe("VideoPlayer", () => {
       </MemoryRouter>,
     );
 
-    const player = container.firstElementChild;
-    if (!(player instanceof HTMLElement)) {
-      throw new Error("プレイヤーが見つかりません");
-    }
+    const player = getPlayer(container);
 
-    fireEvent.click(player);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
 
     expect(playSpy).toHaveBeenCalled();
     expect(document.querySelector('[data-video-center-feedback="play"]')).not.toBeNull();
 
-    fireEvent.click(player);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
 
     expect(pauseSpy).toHaveBeenCalled();
     expect(document.querySelector('[data-video-center-feedback="pause"]')).not.toBeNull();
@@ -144,23 +176,15 @@ describe("VideoPlayer", () => {
       </MemoryRouter>,
     );
 
-    const player = container.firstElementChild;
-    if (!(player instanceof HTMLElement)) {
-      throw new Error("プレイヤーが見つかりません");
-    }
+    const player = getPlayer(container);
 
-    fireEvent.click(player);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
     act(() => {
       vi.advanceTimersByTime(2000);
     });
 
-    const touchClick = new MouseEvent("click", { bubbles: true, cancelable: true });
-    Object.defineProperty(touchClick, "pointerType", {
-      configurable: true,
-      value: "touch",
-    });
-
-    fireEvent(player, touchClick);
+    fireEvent(player, createPointerUpEvent("touch"));
 
     expect(playSpy).toHaveBeenCalledTimes(1);
     expect(pauseSpy).not.toHaveBeenCalled();
@@ -180,23 +204,16 @@ describe("VideoPlayer", () => {
       </MemoryRouter>,
     );
 
-    const player = container.firstElementChild;
-    if (!(player instanceof HTMLElement)) {
-      throw new Error("プレイヤーが見つかりません");
-    }
+    const player = getPlayer(container);
 
-    fireEvent.click(player);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
     act(() => {
       vi.advanceTimersByTime(2000);
     });
 
-    const mouseClick = new MouseEvent("click", { bubbles: true, cancelable: true });
-    Object.defineProperty(mouseClick, "pointerType", {
-      configurable: true,
-      value: "mouse",
-    });
-
-    fireEvent(player, mouseClick);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
 
     expect(playSpy).toHaveBeenCalledTimes(1);
     expect(pauseSpy).toHaveBeenCalledTimes(1);
@@ -216,22 +233,16 @@ describe("VideoPlayer", () => {
       </MemoryRouter>,
     );
 
-    const player = container.firstElementChild;
-    if (!(player instanceof HTMLElement)) {
-      throw new Error("プレイヤーが見つかりません");
-    }
+    const player = getPlayer(container);
 
-    fireEvent.click(player);
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
     act(() => {
       vi.advanceTimersByTime(2000);
     });
 
-    const touchClick = new MouseEvent("click", { bubbles: true, cancelable: true });
-    Object.defineProperty(touchClick, "pointerType", {
-      configurable: true,
-      value: "touch",
-    });
-    fireEvent(player, touchClick);
+    fireEvent(player, createPointerUpEvent("touch"));
+    advanceSingleClickDelay();
 
     const muteButton = screen.getByRole("button", { name: "ミュート" });
     const controlSection = muteButton.closest("[data-video-control]");
@@ -252,6 +263,145 @@ describe("VideoPlayer", () => {
     });
 
     expect(controlSection?.className.includes("pointer-events-auto")).toBe(false);
+  });
+
+  describe("フルスクリーン", () => {
+    function renderPlayer() {
+      return render(
+        <MemoryRouter>
+          <VideoPlayer
+            backHref="/works/work-1"
+            src="/stream/test.mp4"
+            workTitle="作品タイトル"
+            episodeTitle="#01"
+          />
+        </MemoryRouter>,
+      );
+    }
+
+    afterEach(() => {
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: null,
+      });
+    });
+
+    it("ダブルクリックするとフルスクリーンに切り替わる", () => {
+      vi.useFakeTimers();
+
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      player.requestFullscreen = requestFullscreen;
+
+      fireEvent(player, createPointerUpEvent("mouse"));
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS - 1);
+      });
+      fireEvent(player, createPointerUpEvent("mouse"));
+
+      expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    });
+
+    it("フルスクリーン中にダブルクリックするとフルスクリーンが解除される", () => {
+      vi.useFakeTimers();
+
+      const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: player,
+      });
+      document.exitFullscreen = exitFullscreen;
+
+      fireEvent(player, createPointerUpEvent("mouse"));
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS - 1);
+      });
+      fireEvent(player, createPointerUpEvent("mouse"));
+
+      expect(exitFullscreen).toHaveBeenCalledTimes(1);
+    });
+
+    it("ダブルクリックしても再生状態は切り替わらない", () => {
+      vi.useFakeTimers();
+
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      player.requestFullscreen = requestFullscreen;
+
+      fireEvent(player, createPointerUpEvent("mouse"));
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS - 1);
+      });
+      fireEvent(player, createPointerUpEvent("mouse"));
+      advanceSingleClickDelay();
+
+      expect(playSpy).not.toHaveBeenCalled();
+      expect(pauseSpy).not.toHaveBeenCalled();
+    });
+
+    it("ダブルクリックしても中央フィードバックが表示されない", () => {
+      vi.useFakeTimers();
+
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      player.requestFullscreen = requestFullscreen;
+
+      fireEvent(player, createPointerUpEvent("mouse"));
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS - 1);
+      });
+      fireEvent(player, createPointerUpEvent("mouse"));
+
+      expect(document.querySelector("[data-video-center-feedback]")).toBeNull();
+    });
+
+    it("作品タイトル部分をダブルクリックしてもフルスクリーンにならない", () => {
+      vi.useFakeTimers();
+
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      player.requestFullscreen = requestFullscreen;
+      document.exitFullscreen = exitFullscreen;
+
+      fireEvent(screen.getByText("作品タイトル"), createPointerUpEvent("mouse"));
+      act(() => {
+        vi.advanceTimersByTime(DOUBLE_CLICK_THRESHOLD_MS - 1);
+      });
+      fireEvent(screen.getByText("作品タイトル"), createPointerUpEvent("mouse"));
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(exitFullscreen).not.toHaveBeenCalled();
+    });
+
+    it("タッチでのダブルタップではフルスクリーンにならない", () => {
+      vi.useFakeTimers();
+
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderPlayer();
+      const player = getPlayer(container);
+
+      player.requestFullscreen = requestFullscreen;
+      document.exitFullscreen = exitFullscreen;
+
+      fireEvent(player, createPointerUpEvent("touch"));
+      fireEvent(player, createPointerUpEvent("touch"));
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(exitFullscreen).not.toHaveBeenCalled();
+    });
   });
 
   describe("キーボードショートカット", () => {

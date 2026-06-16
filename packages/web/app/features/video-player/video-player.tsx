@@ -1,4 +1,4 @@
-import { useCallback, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -7,6 +7,7 @@ import { VideoPlayerCenterFeedback } from "./video-player-center-feedback";
 import { VideoPlayerControls } from "./video-player-controls";
 
 const SEEK_STEP_SECONDS = 10;
+const DOUBLE_CLICK_THRESHOLD_MS = 200;
 
 type VideoPlayerProps = {
   src: string;
@@ -16,6 +17,14 @@ type VideoPlayerProps = {
   autoPlay?: boolean;
   className?: string;
 };
+
+function isVideoControlTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.closest("[data-video-control]") !== null;
+}
 
 export function VideoPlayer({
   src,
@@ -48,38 +57,96 @@ export function VideoPlayer({
     triggerCenterFeedback,
   } = useVideoPlayer({ autoPlay, seekStepSeconds: SEEK_STEP_SECONDS });
 
-  const handleContainerClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      if (target.closest("[data-video-control]")) {
-        return;
-      }
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMouseClickAtRef = useRef<number | null>(null);
 
-      const nativeEvent = event.nativeEvent;
-      const pointerType =
-        "pointerType" in nativeEvent && typeof nativeEvent.pointerType === "string"
-          ? nativeEvent.pointerType
-          : "mouse";
-      const shouldTogglePlay = pointerType !== "touch" || showControls;
+  const clearClickTimer = useCallback(() => {
+    if (clickTimerRef.current !== null) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+  }, []);
 
-      if (shouldTogglePlay) {
-        triggerCenterFeedback({ type: isPlaying ? "pause" : "play" });
-        togglePlay();
-      }
-      onUserActivity();
+  const handleContainerSingleClick = useCallback(
+    (shouldTogglePlay: boolean) => {
+      clearClickTimer();
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        lastMouseClickAtRef.current = null;
+
+        if (shouldTogglePlay) {
+          triggerCenterFeedback({ type: isPlaying ? "pause" : "play" });
+          togglePlay();
+        }
+        onUserActivity();
+      }, DOUBLE_CLICK_THRESHOLD_MS);
     },
-    [isPlaying, onUserActivity, showControls, togglePlay, triggerCenterFeedback],
+    [clearClickTimer, isPlaying, onUserActivity, togglePlay, triggerCenterFeedback],
   );
+
+  const handleContainerPointerUp = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (isVideoControlTarget(event.target)) {
+        return;
+      }
+
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+
+      const shouldTogglePlay = event.pointerType !== "touch" || showControls;
+
+      if (event.pointerType !== "mouse") {
+        clearClickTimer();
+        lastMouseClickAtRef.current = null;
+
+        if (shouldTogglePlay) {
+          triggerCenterFeedback({ type: isPlaying ? "pause" : "play" });
+          togglePlay();
+        }
+        onUserActivity();
+        return;
+      }
+
+      const lastMouseClickAt = lastMouseClickAtRef.current;
+      if (
+        lastMouseClickAt !== null &&
+        event.timeStamp - lastMouseClickAt <= DOUBLE_CLICK_THRESHOLD_MS
+      ) {
+        lastMouseClickAtRef.current = null;
+        clearClickTimer();
+        void toggleFullscreen();
+        onUserActivity();
+        return;
+      }
+
+      lastMouseClickAtRef.current = event.timeStamp;
+      handleContainerSingleClick(shouldTogglePlay);
+    },
+    [
+      clearClickTimer,
+      handleContainerSingleClick,
+      isPlaying,
+      onUserActivity,
+      showControls,
+      toggleFullscreen,
+      togglePlay,
+      triggerCenterFeedback,
+    ],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearClickTimer();
+    };
+  }, [clearClickTimer]);
 
   return (
     <div
       ref={containerRef}
       className={cn("relative h-full w-full bg-black", !showControls && "cursor-none", className)}
-      onClick={handleContainerClick}
       onMouseMove={onUserActivity}
+      onPointerUp={handleContainerPointerUp}
     >
       <video
         ref={videoRef}
