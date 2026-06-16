@@ -4,8 +4,6 @@ import {
   MinimizeIcon,
   PauseIcon,
   PlayIcon,
-  RotateCcwIcon,
-  RotateCwIcon,
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react";
@@ -16,6 +14,7 @@ import { Slider } from "~/components/ui/slider";
 import { cn } from "~/lib/utils";
 
 import { formatDuration } from "./utils";
+import { SkipSecondsIcon } from "./video-player-skip-seconds-icon";
 
 const videoIconButtonClassName = cn(
   "shrink-0 rounded-full bg-transparent text-neutral-100 shadow-none",
@@ -25,7 +24,6 @@ const videoIconButtonClassName = cn(
 
 const videoButtonClassName = cn(videoIconButtonClassName, "size-12");
 const videoIconClassName = "size-7 shrink-0";
-const skipIconClassName = "size-8 shrink-0";
 const videoSliderClassName = cn(
   "min-h-6 items-center",
   "**:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/30",
@@ -47,33 +45,6 @@ const thickIconProps = {
   stroke: "currentColor",
   strokeWidth: 2.75,
 } as const;
-
-const skipIconProps = {
-  stroke: "currentColor",
-  strokeWidth: 2,
-} as const;
-
-function SkipSecondsIcon({
-  direction,
-  seekStepSeconds,
-}: {
-  direction: "backward" | "forward";
-  seekStepSeconds: number;
-}) {
-  const Icon = direction === "backward" ? RotateCcwIcon : RotateCwIcon;
-
-  return (
-    <span className="relative inline-flex size-8 shrink-0 items-center justify-center">
-      <Icon className={skipIconClassName} {...skipIconProps} />
-      <span
-        aria-hidden="true"
-        className="absolute inset-0 flex items-center justify-center pt-px text-[10px] font-semibold leading-none tabular-nums"
-      >
-        {seekStepSeconds}
-      </span>
-    </span>
-  );
-}
 
 export type VideoPlayerControlsProps = {
   episodeTitle: string;
@@ -198,7 +169,11 @@ export function VideoPlayerControls({
                 size="icon"
                 variant="ghost"
               >
-                <SkipSecondsIcon direction="backward" seekStepSeconds={seekStepSeconds} />
+                <SkipSecondsIcon
+                  className="size-8"
+                  direction="backward"
+                  seekStepSeconds={seekStepSeconds}
+                />
               </Button>
               <Button
                 aria-label={`${seekStepSeconds}秒進む`}
@@ -207,7 +182,11 @@ export function VideoPlayerControls({
                 size="icon"
                 variant="ghost"
               >
-                <SkipSecondsIcon direction="forward" seekStepSeconds={seekStepSeconds} />
+                <SkipSecondsIcon
+                  className="size-8"
+                  direction="forward"
+                  seekStepSeconds={seekStepSeconds}
+                />
               </Button>
               <Button
                 aria-label={isMuted ? "ミュート解除" : "ミュート"}

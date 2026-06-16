@@ -7,6 +7,32 @@ import {
 
 const OVERLAY_HIDE_DELAY_MS = 2000;
 const CENTER_FEEDBACK_HOLD_MS = 400;
+const KEYBOARD_VOLUME_STEP = 0.05;
+
+export type CenterFeedback =
+  | { type: "play" }
+  | { type: "pause" }
+  | { type: "skipBackward" }
+  | { type: "skipForward" }
+  | { type: "volume"; level: number }
+  | { type: "mute" };
+
+function isKeyboardShortcutBlocked(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented) {
+    return true;
+  }
+
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    return true;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.closest("input, textarea") !== null;
+}
 
 type UseVideoPlayerOptions = {
   autoPlay?: boolean;
@@ -20,7 +46,7 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
   const centerFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [centerFeedbackAction, setCenterFeedbackAction] = useState<"play" | "pause" | null>(null);
+  const [centerFeedback, setCenterFeedback] = useState<CenterFeedback | null>(null);
   const [centerFeedbackVisible, setCenterFeedbackVisible] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -37,9 +63,9 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
   }, []);
 
   const triggerCenterFeedback = useCallback(
-    (action: "play" | "pause") => {
+    (feedback: CenterFeedback) => {
       clearCenterFeedbackTimeout();
-      setCenterFeedbackAction(action);
+      setCenterFeedback(feedback);
       setCenterFeedbackVisible(true);
       centerFeedbackTimeoutRef.current = setTimeout(() => {
         setCenterFeedbackVisible(false);
@@ -241,6 +267,98 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
   }, []);
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isKeyboardShortcutBlocked(event)) {
+        return;
+      }
+
+      const video = videoRef.current;
+
+      switch (event.key) {
+        case " ":
+        case "k":
+        case "K":
+          if (event.repeat) {
+            event.preventDefault();
+            return;
+          }
+
+          if (video) {
+            triggerCenterFeedback({ type: video.paused ? "play" : "pause" });
+          }
+          togglePlay();
+          onUserActivity();
+          break;
+        case "ArrowLeft":
+          skipBackward();
+          triggerCenterFeedback({ type: "skipBackward" });
+          break;
+        case "ArrowRight":
+          skipForward();
+          triggerCenterFeedback({ type: "skipForward" });
+          break;
+        case "ArrowUp":
+          if (video) {
+            const nextVolume = Math.min(Math.max(video.volume + KEYBOARD_VOLUME_STEP, 0), 1);
+            setVideoVolume(nextVolume);
+            triggerCenterFeedback({ type: "volume", level: nextVolume });
+          }
+          break;
+        case "ArrowDown":
+          if (video) {
+            const nextVolume = Math.min(Math.max(video.volume - KEYBOARD_VOLUME_STEP, 0), 1);
+            setVideoVolume(nextVolume);
+            triggerCenterFeedback({ type: "volume", level: nextVolume });
+          }
+          break;
+        case "f":
+        case "F":
+          if (event.repeat) {
+            event.preventDefault();
+            return;
+          }
+
+          void toggleFullscreen();
+          break;
+        case "m":
+        case "M":
+          if (event.repeat) {
+            event.preventDefault();
+            return;
+          }
+
+          if (video) {
+            toggleMute();
+            if (video.muted) {
+              triggerCenterFeedback({ type: "mute" });
+            } else {
+              triggerCenterFeedback({ type: "volume", level: video.volume });
+            }
+          }
+          break;
+        default:
+          return;
+      }
+
+      event.preventDefault();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    onUserActivity,
+    setVideoVolume,
+    skipBackward,
+    skipForward,
+    toggleFullscreen,
+    toggleMute,
+    togglePlay,
+    triggerCenterFeedback,
+  ]);
+
+  useEffect(() => {
     if (!autoPlay) {
       return;
     }
@@ -273,7 +391,7 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
     containerRef,
     videoRef,
     isPlaying,
-    centerFeedbackAction,
+    centerFeedback,
     centerFeedbackVisible,
     currentTime,
     duration,

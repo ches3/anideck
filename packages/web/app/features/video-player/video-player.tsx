@@ -35,7 +35,7 @@ export function VideoPlayer({
     isMuted,
     isFullscreen,
     showControls,
-    centerFeedbackAction,
+    centerFeedback,
     centerFeedbackVisible,
     togglePlay,
     seek,
@@ -66,7 +66,7 @@ export function VideoPlayer({
       const shouldTogglePlay = pointerType !== "touch" || showControls;
 
       if (shouldTogglePlay) {
-        triggerCenterFeedback(isPlaying ? "pause" : "play");
+        triggerCenterFeedback({ type: isPlaying ? "pause" : "play" });
         togglePlay();
       }
       onUserActivity();
@@ -79,7 +79,6 @@ export function VideoPlayer({
       ref={containerRef}
       className={cn("relative h-full w-full bg-black", !showControls && "cursor-none", className)}
       onClick={handleContainerClick}
-      onKeyDown={onUserActivity}
       onMouseMove={onUserActivity}
     >
       <video
@@ -89,8 +88,12 @@ export function VideoPlayer({
         playsInline
         src={src}
       />
-      {centerFeedbackAction !== null ? (
-        <VideoPlayerCenterFeedback action={centerFeedbackAction} visible={centerFeedbackVisible} />
+      {centerFeedback !== null ? (
+        <VideoPlayerCenterFeedback
+          feedback={centerFeedback}
+          seekStepSeconds={SEEK_STEP_SECONDS}
+          visible={centerFeedbackVisible}
+        />
       ) : null}
       <VideoPlayerControls
         backHref={backHref}

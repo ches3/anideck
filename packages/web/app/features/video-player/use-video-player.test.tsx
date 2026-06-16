@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { useVideoPlayer } from "./use-video-player";
@@ -356,16 +356,171 @@ describe("useVideoPlayer", () => {
       const { getHook } = renderUseVideoPlayer();
 
       act(() => {
-        getHook().triggerCenterFeedback("play");
+        getHook().triggerCenterFeedback({ type: "play" });
       });
 
-      expect(getHook().centerFeedbackAction).toBe("play");
+      expect(getHook().centerFeedback).toEqual({ type: "play" });
       expect(getHook().centerFeedbackVisible).toBe(true);
 
       act(() => {
         vi.advanceTimersByTime(400);
       });
 
+      expect(getHook().centerFeedbackVisible).toBe(false);
+    });
+
+    it("連続呼び出しで centerFeedback が最新値に更新される", () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().triggerCenterFeedback({ type: "volume", level: 0.5 });
+      });
+
+      expect(getHook().centerFeedback).toEqual({ type: "volume", level: 0.5 });
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+        getHook().triggerCenterFeedback({ type: "volume", level: 0.6 });
+      });
+
+      expect(getHook().centerFeedback).toEqual({ type: "volume", level: 0.6 });
+      expect(getHook().centerFeedbackVisible).toBe(true);
+    });
+  });
+
+  describe("キーボードショートカット", () => {
+    function prepareVideo(video: HTMLVideoElement) {
+      setVideoProperties(video, { duration: 120, currentTime: 50, volume: 1, muted: false });
+      act(() => {
+        video.dispatchEvent(new Event("loadedmetadata"));
+      });
+    }
+
+    it("操作に応じて centerFeedback と動画状態を更新する", () => {
+      const { getHook, video } = renderUseVideoPlayer();
+      prepareVideo(video);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "ArrowLeft" });
+      });
+      expect(video.currentTime).toBe(40);
+      expect(getHook().centerFeedback).toEqual({ type: "skipBackward" });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "ArrowRight" });
+      });
+      expect(video.currentTime).toBe(50);
+      expect(getHook().centerFeedback).toEqual({ type: "skipForward" });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "ArrowDown" });
+      });
+      expect(video.volume).toBe(0.95);
+      expect(getHook().centerFeedback).toEqual({ type: "volume", level: 0.95 });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "ArrowUp" });
+      });
+      expect(video.volume).toBe(1);
+      expect(getHook().centerFeedback).toEqual({ type: "volume", level: 1 });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "m" });
+      });
+      expect(video.muted).toBe(true);
+      expect(getHook().centerFeedback).toEqual({ type: "mute" });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "m" });
+      });
+      expect(video.muted).toBe(false);
+      expect(getHook().centerFeedback).toEqual({ type: "volume", level: 1 });
+
+      setVideoProperties(video, { paused: true });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: " " });
+      });
+      expect(getHook().centerFeedback).toEqual({ type: "play" });
+
+      setVideoProperties(video, { paused: false });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: " " });
+      });
+      expect(getHook().centerFeedback).toEqual({ type: "pause" });
+    });
+
+    it("トグル系キーのリピートではショートカットを実行しない", () => {
+      const { getHook, video, container } = renderUseVideoPlayer();
+      prepareVideo(video);
+      const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+      container.requestFullscreen = requestFullscreen;
+      setVideoProperties(video, { paused: true });
+
+      act(() => {
+        fireEvent.keyDown(window, { key: " ", repeat: true });
+      });
+
+      expect(video.paused).toBe(true);
+      expect(getHook().centerFeedback).toBeNull();
+      expect(getHook().hasRecentActivity).toBe(false);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "k", repeat: true });
+      });
+
+      expect(video.paused).toBe(true);
+      expect(getHook().centerFeedback).toBeNull();
+      expect(getHook().hasRecentActivity).toBe(false);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "m", repeat: true });
+      });
+
+      expect(video.muted).toBe(false);
+      expect(getHook().centerFeedback).toBeNull();
+      expect(getHook().hasRecentActivity).toBe(false);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "f", repeat: true });
+      });
+
+      expect(requestFullscreen).not.toHaveBeenCalled();
+      expect(getHook().centerFeedback).toBeNull();
+      expect(getHook().hasRecentActivity).toBe(false);
+    });
+
+    it("defaultPrevented 済みのキーイベントではショートカットを実行しない", () => {
+      const { getHook, video } = renderUseVideoPlayer();
+      prepareVideo(video);
+
+      const event = new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "ArrowRight",
+      });
+      event.preventDefault();
+
+      act(() => {
+        window.dispatchEvent(event);
+      });
+
+      expect(video.currentTime).toBe(50);
+      expect(getHook().centerFeedback).toBeNull();
+    });
+
+    it("F キーでは centerFeedback を設定しない", () => {
+      const { getHook, container } = renderUseVideoPlayer();
+      container.requestFullscreen = vi.fn().mockResolvedValue(undefined);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: "f" });
+      });
+
+      expect(getHook().centerFeedback).toBeNull();
       expect(getHook().centerFeedbackVisible).toBe(false);
     });
   });
@@ -534,7 +689,7 @@ describe("useVideoPlayer", () => {
     const { getHook, unmount } = renderUseVideoPlayer();
 
     act(() => {
-      getHook().triggerCenterFeedback("pause");
+      getHook().triggerCenterFeedback({ type: "pause" });
     });
 
     unmount();
