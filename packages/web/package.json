@@ -10,6 +10,7 @@
   "dependencies": {
     "@anideck/api": "workspace:*",
     "@fontsource-variable/geist": "^5.2.9",
+    "@libsql/client": "^0.17.3",
     "@react-router/node": "^7.17.0",
     "@tailwindcss/vite": "^4.3.0",
     "class-variance-authority": "^0.7.1",
