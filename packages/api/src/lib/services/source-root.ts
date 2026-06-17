@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ulid } from "ulid";
 
 import {
@@ -9,13 +9,25 @@ import {
   createSourceRootNotFoundError,
   createSourceRootPathError,
 } from "../../errors/index.ts";
-import type { Db } from "../db/index.ts";
-import { sourceRoots } from "../db/schema.ts";
+import type { Db, DbOrTransaction } from "../db/index.ts";
+import { episodes, sourceRoots } from "../db/schema.ts";
 import { classifySourceRootPathFailure } from "../fs-error.ts";
+import { type CatalogSyncStatus, trySyncSourceRootCatalog } from "./catalog-sync.ts";
 
 export interface SourceRootRecord {
   id: string;
   path: string;
+}
+
+export interface SourceRootMutationResult extends SourceRootRecord {
+  sync: CatalogSyncStatus;
+}
+
+async function deactivateSourceRootEpisodes(tx: DbOrTransaction, rootId: string): Promise<void> {
+  await tx
+    .update(episodes)
+    .set({ active: false })
+    .where(and(eq(episodes.rootId, rootId), eq(episodes.active, true)));
 }
 
 export async function assertSourceRootPathAvailable(path: string): Promise<void> {
@@ -74,7 +86,7 @@ export async function updateSourceRoot(
   db: Db,
   rootId: string,
   input: { path: string },
-): Promise<SourceRootRecord> {
+): Promise<SourceRootMutationResult> {
   const existing = await getSourceRoot(db, rootId);
   if (existing === null) {
     throw createSourceRootNotFoundError(rootId);
@@ -82,21 +94,28 @@ export async function updateSourceRoot(
 
   await assertSourceRootPathAvailable(input.path);
 
-  const result = await db
-    .update(sourceRoots)
-    .set({ path: input.path })
-    .where(eq(sourceRoots.id, rootId))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const result = await tx
+      .update(sourceRoots)
+      .set({ path: input.path })
+      .where(eq(sourceRoots.id, rootId))
+      .returning();
 
-  if (result.length === 0) {
-    throw createSourceRootNotFoundError(rootId);
-  }
+    if (result.length === 0) {
+      throw createSourceRootNotFoundError(rootId);
+    }
 
-  const updated = result[0];
+    await deactivateSourceRootEpisodes(tx, rootId);
+
+    return result[0];
+  });
+
+  const sync = await trySyncSourceRootCatalog(db, rootId);
 
   return {
     id: updated.id,
     path: updated.path,
+    sync,
   };
 }
 

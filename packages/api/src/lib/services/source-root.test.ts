@@ -1,24 +1,33 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import type * as FsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { NotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
-import { sourceExcludeRules, sourceIncludeRules } from "../db/schema.ts";
-import { createTestDb } from "../db/test-helper.ts";
+import { episodes, sourceExcludeRules, sourceIncludeRules } from "../db/schema.ts";
+import { createTestDb, type TestDb } from "../db/test-helper.ts";
+import { createEpisodeId, createWorkId } from "../work-id.ts";
 import {
   createSourceRoot,
   deleteSourceRoot,
   getSourceRoot,
   updateSourceRoot,
 } from "./source-root.ts";
+import { createSourceIncludeRule } from "./source-rule.ts";
+import { getWork } from "./work.ts";
+
+function regexPathWithNamedGroups(workTitlePattern: string, episodeTitlePattern: string): string {
+  const regexSep = sep.replaceAll("\\", "\\\\");
+  return `(?<workTitle>${workTitlePattern})${regexSep}(?<episodeTitle>${episodeTitlePattern})\\.mp4`;
+}
 
 const fsMockState = vi.hoisted(() => ({
   unreadableDirPath: undefined as string | undefined,
+  readdirErrorPath: undefined as string | undefined,
 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -37,21 +46,38 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       }
       return actual.opendir(...args);
     },
+    readdir: async (...args: Parameters<typeof actual.readdir>) => {
+      const [path] = args;
+      if (
+        fsMockState.readdirErrorPath !== undefined &&
+        String(path) === fsMockState.readdirErrorPath
+      ) {
+        const error = new Error("directory cannot be listed") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+      return actual.readdir(...args);
+    },
   };
 });
 
 describe("source-root service", () => {
   let db: Db;
+  let testDb: TestDb | undefined;
   let tempDir: string;
 
   beforeEach(async () => {
-    ({ db } = await createTestDb());
+    testDb = await createTestDb();
+    db = testDb.db;
     tempDir = await mkdtemp(join(tmpdir(), "anideck-source-root-"));
   });
 
   afterEach(async () => {
     fsMockState.unreadableDirPath = undefined;
+    fsMockState.readdirErrorPath = undefined;
     vi.restoreAllMocks();
+    await testDb?.cleanup();
+    testDb = undefined;
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -72,6 +98,9 @@ describe("source-root service", () => {
       expect(updated).toEqual({
         id: root.id,
         path: updatedDir,
+        sync: {
+          status: "success",
+        },
       });
     } finally {
       await rm(updatedDir, { recursive: true, force: true });
@@ -153,6 +182,124 @@ describe("source-root service", () => {
 
   it("存在しない id の削除は NotFoundError になる", async () => {
     await expect(deleteSourceRoot(db, "missing")).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("path 更新後に catalog を同期する", async () => {
+    const root = await createSourceRoot(db, { path: tempDir });
+    const updatedDir = await mkdtemp(join(tmpdir(), "anideck-source-root-updated-"));
+
+    try {
+      await mkdir(join(tempDir, "Series A"), { recursive: true });
+      await writeFile(join(tempDir, "Series A", "#01.mp4"), "");
+
+      await createSourceIncludeRule(db, {
+        rootId: root.id,
+        pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
+        sortOrder: 0,
+      });
+
+      const seriesAWorkId = createWorkId(root.id, "Series A");
+      await expect(getWork(db, seriesAWorkId)).resolves.toMatchObject({
+        id: seriesAWorkId,
+        episodes: [{ title: "#01", path: join(tempDir, "Series A", "#01.mp4") }],
+      });
+
+      await mkdir(join(updatedDir, "Series B"), { recursive: true });
+      await writeFile(join(updatedDir, "Series B", "#01.mp4"), "");
+
+      const updated = await updateSourceRoot(db, root.id, { path: updatedDir });
+
+      expect(updated).toMatchObject({
+        id: root.id,
+        path: updatedDir,
+        sync: {
+          status: "success",
+        },
+      });
+
+      const seriesAEpisode = await db.query.episodes.findFirst({
+        where: eq(episodes.id, createEpisodeId(root.id, join("Series A", "#01.mp4"))),
+      });
+      const seriesBEpisode = await db.query.episodes.findFirst({
+        where: eq(episodes.id, createEpisodeId(root.id, join("Series B", "#01.mp4"))),
+      });
+
+      expect(seriesAEpisode?.active).toBe(false);
+      expect(seriesBEpisode?.active).toBe(true);
+
+      const seriesBWorkId = createWorkId(root.id, "Series B");
+      await expect(getWork(db, seriesBWorkId)).resolves.toMatchObject({
+        id: seriesBWorkId,
+        episodes: [{ title: "#01", path: join(updatedDir, "Series B", "#01.mp4") }],
+      });
+      await expect(getWork(db, seriesAWorkId)).rejects.toBeInstanceOf(NotFoundError);
+    } finally {
+      await rm(updatedDir, { recursive: true, force: true });
+    }
+  });
+
+  it("path 更新後のデータ同期が失敗した場合は更新結果と同期結果を返す", async () => {
+    const root = await createSourceRoot(db, { path: tempDir });
+    const updatedDir = await mkdtemp(join(tmpdir(), "anideck-source-root-updated-"));
+    const otherDir = await mkdtemp(join(tmpdir(), "anideck-source-root-other-"));
+
+    try {
+      await mkdir(join(tempDir, "Series A"), { recursive: true });
+      await writeFile(join(tempDir, "Series A", "#01.mp4"), "");
+
+      await createSourceIncludeRule(db, {
+        rootId: root.id,
+        pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
+        sortOrder: 0,
+      });
+      const seriesAWorkId = createWorkId(root.id, "Series A");
+      await expect(getWork(db, seriesAWorkId)).resolves.toMatchObject({
+        id: seriesAWorkId,
+        episodes: [{ title: "#01", path: join(tempDir, "Series A", "#01.mp4") }],
+      });
+
+      const otherRoot = await createSourceRoot(db, { path: otherDir });
+      await mkdir(join(otherDir, "Series B"), { recursive: true });
+      await writeFile(join(otherDir, "Series B", "#01.mp4"), "");
+      await createSourceIncludeRule(db, {
+        rootId: otherRoot.id,
+        pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
+        sortOrder: 0,
+      });
+      const seriesBWorkId = createWorkId(otherRoot.id, "Series B");
+
+      fsMockState.readdirErrorPath = updatedDir;
+
+      const updated = await updateSourceRoot(db, root.id, { path: updatedDir });
+
+      expect(updated).toEqual({
+        id: root.id,
+        path: updatedDir,
+        sync: {
+          status: "failed",
+          error: "指定されたフォルダを読み取れません",
+        },
+      });
+      await expect(getSourceRoot(db, root.id)).resolves.toEqual({
+        id: root.id,
+        path: updatedDir,
+      });
+
+      const seriesAEpisode = await db.query.episodes.findFirst({
+        where: eq(episodes.id, createEpisodeId(root.id, join("Series A", "#01.mp4"))),
+      });
+
+      expect(seriesAEpisode?.active).toBe(false);
+      await expect(getWork(db, seriesAWorkId)).rejects.toBeInstanceOf(NotFoundError);
+      await expect(getWork(db, seriesBWorkId)).resolves.toMatchObject({
+        id: seriesBWorkId,
+        episodes: [{ title: "#01", path: join(otherDir, "Series B", "#01.mp4") }],
+      });
+    } finally {
+      fsMockState.readdirErrorPath = undefined;
+      await rm(updatedDir, { recursive: true, force: true });
+      await rm(otherDir, { recursive: true, force: true });
+    }
   });
 
   it("削除時に紐づく include / exclude rule も削除される", async () => {

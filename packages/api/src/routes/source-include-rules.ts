@@ -11,10 +11,11 @@ export const sourceIncludeRulesRoute = new Hono<ApiEnv>()
     const ruleId = c.req.param("ruleId");
     const body = c.req.valid("json");
     const includeRule = await updateSourceIncludeRule(db, ruleId, body);
-    return c.json({ includeRule }, 200);
+    const { sync, ...rule } = includeRule;
+    return c.json({ includeRule: rule, sync }, 200);
   })
   .delete("/:ruleId", async (c) => {
     const ruleId = c.req.param("ruleId");
-    await deleteSourceIncludeRule(db, ruleId);
-    return c.body(null, 204);
+    const result = await deleteSourceIncludeRule(db, ruleId);
+    return c.json(result, 200);
   });

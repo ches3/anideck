@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ConflictError, NotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
 import { sourceRoots } from "../db/schema.ts";
-import { createTestDb } from "../db/test-helper.ts";
+import { createTestDb, type TestDb } from "../db/test-helper.ts";
+import { trySyncSourceRootCatalog } from "./catalog-sync.ts";
 import {
   createSourceExcludeRule,
   createSourceIncludeRule,
@@ -15,17 +16,34 @@ import {
   updateSourceIncludeRule,
 } from "./source-rule.ts";
 
+vi.mock("./catalog-sync.ts", () => ({
+  trySyncSourceRootCatalog: vi.fn(),
+}));
+
+const SYNC_SUCCESS = {
+  status: "success" as const,
+};
+
 describe("source-rule service", () => {
   let db: Db;
+  let testDb: TestDb | undefined;
   let rootId: string;
 
   beforeEach(async () => {
-    ({ db } = await createTestDb());
+    vi.clearAllMocks();
+    vi.mocked(trySyncSourceRootCatalog).mockResolvedValue(SYNC_SUCCESS);
+    testDb = await createTestDb();
+    db = testDb.db;
     rootId = "source-root";
     await db.insert(sourceRoots).values({
       id: rootId,
       path: "/source-root",
     });
+  });
+
+  afterEach(async () => {
+    await testDb?.cleanup();
+    testDb = undefined;
   });
 
   it("include rule を作成できる", async () => {
@@ -41,6 +59,7 @@ describe("source-rule service", () => {
       rootId,
       pattern: "include-pattern",
       sortOrder: 0,
+      sync: SYNC_SUCCESS,
     });
   });
 
@@ -173,6 +192,7 @@ describe("source-rule service", () => {
       rootId,
       pattern: "updated",
       sortOrder: 0,
+      sync: SYNC_SUCCESS,
     });
   });
 
@@ -192,6 +212,7 @@ describe("source-rule service", () => {
       rootId,
       pattern: "original",
       sortOrder: 1,
+      sync: SYNC_SUCCESS,
     });
   });
 
@@ -407,5 +428,124 @@ describe("source-rule service", () => {
     expect(second.rootId).toBe(otherRootId);
     expect(first.pattern).toBe(second.pattern);
     expect(first.sortOrder).toBe(second.sortOrder);
+  });
+});
+
+describe("カタログ同期", () => {
+  let db: Db;
+  let testDb: TestDb | undefined;
+  let rootId: string;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(trySyncSourceRootCatalog).mockResolvedValue(SYNC_SUCCESS);
+    testDb = await createTestDb();
+    db = testDb.db;
+    rootId = "source-root";
+    await db.insert(sourceRoots).values({
+      id: rootId,
+      path: "/source-root",
+    });
+  });
+
+  afterEach(async () => {
+    await testDb?.cleanup();
+    testDb = undefined;
+  });
+
+  it("include rule 作成後にカタログ同期を行う", async () => {
+    await createSourceIncludeRule(db, {
+      rootId,
+      pattern: "include-pattern",
+      sortOrder: 0,
+    });
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
+  });
+
+  it("カタログ同期が失敗しても include rule 作成結果を返す", async () => {
+    vi.mocked(trySyncSourceRootCatalog).mockResolvedValue({
+      status: "failed",
+      error: "指定されたパスのフォルダは存在しません。",
+    });
+
+    const result = await createSourceIncludeRule(db, {
+      rootId,
+      pattern: "include-pattern",
+      sortOrder: 0,
+    });
+
+    expect(result).toMatchObject({
+      rootId,
+      pattern: "include-pattern",
+      sortOrder: 0,
+      sync: {
+        status: "failed",
+        error: "指定されたパスのフォルダは存在しません。",
+      },
+    });
+    await expect(listSourceIncludeRules(db, rootId)).resolves.toHaveLength(1);
+  });
+
+  it("exclude rule 作成後にカタログ同期を行う", async () => {
+    await createSourceExcludeRule(db, {
+      rootId,
+      pattern: "exclude-pattern",
+      sortOrder: 0,
+    });
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
+  });
+
+  it("include rule 更新後にカタログ同期を行う", async () => {
+    const rule = await createSourceIncludeRule(db, {
+      rootId,
+      pattern: "include-pattern",
+      sortOrder: 0,
+    });
+    vi.clearAllMocks();
+
+    await updateSourceIncludeRule(db, rule.id, { pattern: "updated-pattern" });
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
+  });
+
+  it("exclude rule 更新後にカタログ同期を行う", async () => {
+    const rule = await createSourceExcludeRule(db, {
+      rootId,
+      pattern: "exclude-pattern",
+      sortOrder: 0,
+    });
+    vi.clearAllMocks();
+
+    await updateSourceExcludeRule(db, rule.id, { pattern: "updated-pattern" });
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
+  });
+
+  it("include rule 削除後にカタログ同期を行う", async () => {
+    const rule = await createSourceIncludeRule(db, {
+      rootId,
+      pattern: "include-pattern",
+      sortOrder: 0,
+    });
+    vi.clearAllMocks();
+
+    await deleteSourceIncludeRule(db, rule.id);
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
+  });
+
+  it("exclude rule 削除後にカタログ同期を行う", async () => {
+    const rule = await createSourceExcludeRule(db, {
+      rootId,
+      pattern: "exclude-pattern",
+      sortOrder: 0,
+    });
+    vi.clearAllMocks();
+
+    await deleteSourceExcludeRule(db, rule.id);
+
+    expect(trySyncSourceRootCatalog).toHaveBeenCalledWith(db, rootId);
   });
 });

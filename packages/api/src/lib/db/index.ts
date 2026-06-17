@@ -18,6 +18,8 @@ function createDb(dbPath: string = resolveAnideckDbPath()) {
 }
 
 export type Db = ReturnType<typeof createDb>;
+export type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type DbOrTransaction = Db | DbTransaction;
 
 export const db = createDb();
 

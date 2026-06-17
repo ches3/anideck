@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 
 const ID_LENGTH = 22;
 
-export function createWorkId(workTitle: string): string {
-  return createHashId(workTitle);
+export function createWorkId(rootId: string, workTitle: string): string {
+  return createHashId(`${rootId}:${workTitle}`);
 }
 
 export function createEpisodeId(rootId: string, relativePath: string): string {

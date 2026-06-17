@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { apiApp } from "../app.ts";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors/index.ts";
+import { syncAllSourceRootCatalogs } from "../lib/services/catalog-sync.ts";
 import { listSourceFiles } from "../lib/services/source-file.ts";
 import {
   createSourceRoot,
@@ -20,8 +21,12 @@ import {
 vi.mock("../lib/services/source-root.ts");
 vi.mock("../lib/services/source-rule.ts");
 vi.mock("../lib/services/source-file.ts");
+vi.mock("../lib/services/catalog-sync.ts");
 
 const client = testClient(apiApp);
+const mockSyncResult = {
+  status: "success" as const,
+};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -77,10 +82,31 @@ describe("POST /source-roots", () => {
   });
 });
 
+describe("POST /source-roots/sync", () => {
+  it("全 source root の同期結果を返す", async () => {
+    const mockResult = {
+      roots: [
+        {
+          rootId: "ROOT1",
+          sync: { status: "success" as const },
+        },
+      ],
+    };
+    vi.mocked(syncAllSourceRootCatalogs).mockResolvedValue(mockResult);
+
+    const res = await client["source-roots"].sync.$post();
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toEqual(mockResult);
+    expect(syncAllSourceRootCatalogs).toHaveBeenCalledWith(expect.anything());
+  });
+});
+
 describe("PATCH /source-roots/:rootId", () => {
   it("sourceRoot を更新できる", async () => {
     const mockRoot = { id: "ROOT1", path: "/media/anime2" };
-    vi.mocked(updateSourceRoot).mockResolvedValue(mockRoot);
+    vi.mocked(updateSourceRoot).mockResolvedValue({ ...mockRoot, sync: mockSyncResult });
 
     const res = await client["source-roots"][":rootId"].$patch({
       param: { rootId: "ROOT1" },
@@ -89,7 +115,25 @@ describe("PATCH /source-roots/:rootId", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ sourceRoot: mockRoot });
+    expect(json).toEqual({ sourceRoot: mockRoot, sync: mockSyncResult });
+  });
+
+  it("同期が失敗した場合は status 200 で更新結果と同期結果を返す", async () => {
+    const mockRoot = { id: "ROOT1", path: "/media/anime2" };
+    const sync = {
+      status: "failed" as const,
+      error: "指定されたパスのフォルダは存在しません。",
+    };
+    vi.mocked(updateSourceRoot).mockResolvedValue({ ...mockRoot, sync });
+
+    const res = await client["source-roots"][":rootId"].$patch({
+      param: { rootId: "ROOT1" },
+      json: { path: "/media/anime2" },
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toEqual({ sourceRoot: mockRoot, sync });
   });
 
   it("service が NotFoundError を投げた場合は 404 を返す", async () => {
@@ -175,7 +219,7 @@ describe("POST /source-roots/:rootId/include-rules", () => {
       pattern: "pattern",
       sortOrder: 0,
     };
-    vi.mocked(createSourceIncludeRule).mockResolvedValue(mockRule);
+    vi.mocked(createSourceIncludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
 
     const res = await client["source-roots"][":rootId"]["include-rules"].$post({
       param: { rootId: "ROOT1" },
@@ -184,7 +228,30 @@ describe("POST /source-roots/:rootId/include-rules", () => {
 
     expect(res.status).toBe(201);
     const json = await res.json();
-    expect(json).toEqual({ includeRule: mockRule });
+    expect(json).toEqual({ includeRule: mockRule, sync: mockSyncResult });
+  });
+
+  it("同期が失敗しても includeRule の作成結果と sync 失敗を返す", async () => {
+    const mockRule = {
+      id: "RULE1",
+      rootId: "ROOT1",
+      pattern: "pattern",
+      sortOrder: 0,
+    };
+    const sync = {
+      status: "failed" as const,
+      error: "指定されたパスのフォルダは存在しません。",
+    };
+    vi.mocked(createSourceIncludeRule).mockResolvedValue({ ...mockRule, sync });
+
+    const res = await client["source-roots"][":rootId"]["include-rules"].$post({
+      param: { rootId: "ROOT1" },
+      json: { pattern: "pattern", sortOrder: 0 },
+    });
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json).toEqual({ includeRule: mockRule, sync });
   });
 
   it("service が ConflictError を投げた場合は 409 を返す", async () => {
@@ -235,6 +302,7 @@ describe("POST /source-roots/:rootId/include-rules", () => {
       rootId: "ROOT1",
       pattern: "pattern",
       sortOrder: 0,
+      sync: mockSyncResult,
     });
 
     await client["source-roots"][":rootId"]["include-rules"].$post({
@@ -281,7 +349,7 @@ describe("POST /source-roots/:rootId/exclude-rules", () => {
       pattern: "exclude",
       sortOrder: 0,
     };
-    vi.mocked(createSourceExcludeRule).mockResolvedValue(mockRule);
+    vi.mocked(createSourceExcludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
 
     const res = await client["source-roots"][":rootId"]["exclude-rules"].$post({
       param: { rootId: "ROOT1" },
@@ -290,7 +358,7 @@ describe("POST /source-roots/:rootId/exclude-rules", () => {
 
     expect(res.status).toBe(201);
     const json = await res.json();
-    expect(json).toEqual({ excludeRule: mockRule });
+    expect(json).toEqual({ excludeRule: mockRule, sync: mockSyncResult });
   });
 
   it("pattern が空の場合は 400 を返す", async () => {
@@ -326,6 +394,7 @@ describe("POST /source-roots/:rootId/exclude-rules", () => {
       rootId: "ROOT1",
       pattern: "exclude",
       sortOrder: 0,
+      sync: mockSyncResult,
     });
 
     await client["source-roots"][":rootId"]["exclude-rules"].$post({

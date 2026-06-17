@@ -1,10 +1,19 @@
 import { join } from "node:path";
 
+import { and, asc, eq, exists, sql } from "drizzle-orm";
+
 import { createEpisodeNotFoundError, createWorkNotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
-import { createEpisodeId, createWorkId } from "../work-id.ts";
-import { listSourceFiles } from "./source-file.ts";
-import { listSourceRoots } from "./source-root.ts";
+import { episodes, sourceRoots, works } from "../db/schema.ts";
+
+function hasActiveEpisode(db: Db) {
+  return exists(
+    db
+      .select({ id: sql`1` })
+      .from(episodes)
+      .where(and(eq(episodes.workId, works.id), eq(episodes.active, true))),
+  );
+}
 
 export interface WorkSummary {
   id: string;
@@ -26,112 +35,50 @@ export interface WorkEpisodeDetail {
   episode: WorkEpisode;
 }
 
-interface ResolvedSourceFile {
-  rootId: string;
-  rootPath: string;
-  relativePath: string;
-  workTitle: string;
-  episodeTitle: string;
-}
-
-async function listResolvedSourceFiles(db: Db): Promise<ResolvedSourceFile[]> {
-  const sourceRoots = await listSourceRoots(db);
-  const resolvedFiles: ResolvedSourceFile[] = [];
-
-  for (const sourceRoot of sourceRoots) {
-    const files = await listSourceFiles(db, sourceRoot.id);
-    for (const file of files) {
-      if (file.title === null) {
-        continue;
-      }
-
-      resolvedFiles.push({
-        rootId: sourceRoot.id,
-        rootPath: sourceRoot.path,
-        relativePath: file.relativePath,
-        workTitle: file.title.work,
-        episodeTitle: file.title.episode,
-      });
-    }
-  }
-
-  return resolvedFiles;
-}
-
-function toWorkSummaries(files: ResolvedSourceFile[]): WorkSummary[] {
-  const worksByTitle = new Map<string, WorkSummary>();
-
-  for (const file of files) {
-    if (worksByTitle.has(file.workTitle)) {
-      continue;
-    }
-
-    worksByTitle.set(file.workTitle, {
-      id: createWorkId(file.workTitle),
-      title: file.workTitle,
-    });
-  }
-
-  return [...worksByTitle.values()].sort((a, b) => a.title.localeCompare(b.title));
-}
-
-function toWorkDetail(files: ResolvedSourceFile[], workId: string): WorkDetail {
-  const matchingFiles = files.filter((file) => createWorkId(file.workTitle) === workId);
-  if (matchingFiles.length === 0) {
-    throw createWorkNotFoundError(workId);
-  }
-
-  const workTitle = matchingFiles[0].workTitle;
-
-  return {
-    id: workId,
-    title: workTitle,
-    episodes: matchingFiles
-      .map((file) => ({
-        id: createEpisodeId(file.rootId, file.relativePath),
-        title: file.episodeTitle,
-        path: join(file.rootPath, file.relativePath),
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
-  };
-}
-
-function toWorkEpisodeDetail(
-  files: ResolvedSourceFile[],
-  workId: string,
-  episodeId: string,
-): WorkEpisodeDetail {
-  const matchingFile = files.find(
-    (file) =>
-      createWorkId(file.workTitle) === workId &&
-      createEpisodeId(file.rootId, file.relativePath) === episodeId,
-  );
-
-  if (!matchingFile) {
-    throw createEpisodeNotFoundError(workId, episodeId);
-  }
-
-  return {
-    work: {
-      id: workId,
-      title: matchingFile.workTitle,
-    },
-    episode: {
-      id: episodeId,
-      title: matchingFile.episodeTitle,
-      path: join(matchingFile.rootPath, matchingFile.relativePath),
-    },
-  };
-}
-
 export async function listWorks(db: Db): Promise<WorkSummary[]> {
-  const files = await listResolvedSourceFiles(db);
-  return toWorkSummaries(files);
+  const rows = await db
+    .select({
+      id: works.id,
+      title: works.originalTitle,
+    })
+    .from(works)
+    .where(hasActiveEpisode(db))
+    .orderBy(asc(works.originalTitle), asc(works.rootId));
+
+  return rows;
 }
 
 export async function getWork(db: Db, workId: string): Promise<WorkDetail> {
-  const files = await listResolvedSourceFiles(db);
-  return toWorkDetail(files, workId);
+  const work = await db.query.works.findFirst({
+    where: and(eq(works.id, workId), hasActiveEpisode(db)),
+  });
+
+  if (work === undefined) {
+    throw createWorkNotFoundError(workId);
+  }
+
+  const rows = await db
+    .select({
+      id: episodes.id,
+      title: episodes.originalTitle,
+      rootPath: sourceRoots.path,
+      relativePath: episodes.relativePath,
+    })
+    .from(episodes)
+    .innerJoin(sourceRoots, eq(episodes.rootId, sourceRoots.id))
+    .where(and(eq(episodes.workId, workId), eq(episodes.active, true)));
+
+  return {
+    id: work.id,
+    title: work.originalTitle,
+    episodes: rows
+      .map((row) => ({
+        id: row.id,
+        title: row.title,
+        path: join(row.rootPath, row.relativePath),
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
+  };
 }
 
 export async function getWorkEpisode(
@@ -139,6 +86,39 @@ export async function getWorkEpisode(
   workId: string,
   episodeId: string,
 ): Promise<WorkEpisodeDetail> {
-  const files = await listResolvedSourceFiles(db);
-  return toWorkEpisodeDetail(files, workId, episodeId);
+  const work = await db.query.works.findFirst({
+    where: and(eq(works.id, workId), hasActiveEpisode(db)),
+  });
+
+  if (work === undefined) {
+    throw createWorkNotFoundError(workId);
+  }
+
+  const episode = await db
+    .select({
+      id: episodes.id,
+      title: episodes.originalTitle,
+      rootPath: sourceRoots.path,
+      relativePath: episodes.relativePath,
+    })
+    .from(episodes)
+    .innerJoin(sourceRoots, eq(episodes.rootId, sourceRoots.id))
+    .where(and(eq(episodes.id, episodeId), eq(episodes.workId, workId), eq(episodes.active, true)))
+    .get();
+
+  if (episode === undefined) {
+    throw createEpisodeNotFoundError(workId, episodeId);
+  }
+
+  return {
+    work: {
+      id: work.id,
+      title: work.originalTitle,
+    },
+    episode: {
+      id: episode.id,
+      title: episode.title,
+      path: join(episode.rootPath, episode.relativePath),
+    },
+  };
 }

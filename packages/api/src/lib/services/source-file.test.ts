@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { NotFoundError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
 import { sourceRoots } from "../db/schema.ts";
-import { createTestDb } from "../db/test-helper.ts";
+import { createTestDb, type TestDb } from "../db/test-helper.ts";
 import { listSourceFiles } from "./source-file.ts";
 import { createSourceRoot } from "./source-root.ts";
 import { createSourceExcludeRule, createSourceIncludeRule } from "./source-rule.ts";
@@ -52,11 +52,13 @@ function regexPathWithNamedGroups(workTitlePattern: string, episodeTitlePattern:
 
 describe("source-file service", () => {
   let db: Db;
+  let testDb: TestDb | undefined;
   let rootId: string;
   let tempDir: string;
 
   beforeEach(async () => {
-    ({ db } = await createTestDb());
+    testDb = await createTestDb();
+    db = testDb.db;
     tempDir = await mkdtemp(join(tmpdir(), "anideck-source-file-"));
 
     const root = await createSourceRoot(db, { path: tempDir });
@@ -67,6 +69,8 @@ describe("source-file service", () => {
     fsMockState.unreadableDirPath = undefined;
     fsMockState.unreadableErrorCode = "ENOENT";
     vi.restoreAllMocks();
+    await testDb?.cleanup();
+    testDb = undefined;
     await rm(tempDir, { recursive: true, force: true });
   });
 

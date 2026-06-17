@@ -8,6 +8,9 @@ import { deleteSourceExcludeRule, updateSourceExcludeRule } from "../lib/service
 vi.mock("../lib/services/source-rule.ts");
 
 const client = testClient(apiApp);
+const mockSyncResult = {
+  status: "success" as const,
+};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -21,7 +24,7 @@ describe("PATCH /source-exclude-rules/:ruleId", () => {
       pattern: "updated",
       sortOrder: 1,
     };
-    vi.mocked(updateSourceExcludeRule).mockResolvedValue(mockRule);
+    vi.mocked(updateSourceExcludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
 
     const res = await client["source-exclude-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -30,7 +33,7 @@ describe("PATCH /source-exclude-rules/:ruleId", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ excludeRule: mockRule });
+    expect(json).toEqual({ excludeRule: mockRule, sync: mockSyncResult });
   });
 
   it("service が NotFoundError を投げた場合は 404 を返す", async () => {
@@ -97,7 +100,7 @@ describe("PATCH /source-exclude-rules/:ruleId", () => {
       pattern: "updated",
       sortOrder: 0,
     };
-    vi.mocked(updateSourceExcludeRule).mockResolvedValue(mockRule);
+    vi.mocked(updateSourceExcludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
 
     const res = await client["source-exclude-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -117,7 +120,7 @@ describe("PATCH /source-exclude-rules/:ruleId", () => {
       pattern: "pattern",
       sortOrder: 1,
     };
-    vi.mocked(updateSourceExcludeRule).mockResolvedValue(mockRule);
+    vi.mocked(updateSourceExcludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
 
     const res = await client["source-exclude-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -142,13 +145,15 @@ describe("PATCH /source-exclude-rules/:ruleId", () => {
 
 describe("DELETE /source-exclude-rules/:ruleId", () => {
   it("excludeRule を削除できる", async () => {
-    vi.mocked(deleteSourceExcludeRule).mockResolvedValue(undefined);
+    vi.mocked(deleteSourceExcludeRule).mockResolvedValue({ sync: mockSyncResult });
 
     const res = await client["source-exclude-rules"][":ruleId"].$delete({
       param: { ruleId: "RULE1" },
     });
 
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toEqual({ sync: mockSyncResult });
     expect(deleteSourceExcludeRule).toHaveBeenCalledWith(expect.anything(), "RULE1");
   });
 });

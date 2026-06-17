@@ -3,16 +3,20 @@ import { describe, expect, it } from "vite-plus/test";
 import { createEpisodeId, createWorkId } from "./work-id.ts";
 
 describe("createWorkId", () => {
-  it("同じ workTitle から同じ ID を生成する", () => {
-    expect(createWorkId("Series A")).toBe(createWorkId("Series A"));
+  it("rootId と workTitle が同じである場合は同一の ID を生成する", () => {
+    expect(createWorkId("ROOT1", "Series A")).toBe(createWorkId("ROOT1", "Series A"));
   });
 
-  it("異なる workTitle から異なる ID を生成する", () => {
-    expect(createWorkId("Series A")).not.toBe(createWorkId("Series B"));
+  it("workTitle が異なる場合は異なる ID を生成する", () => {
+    expect(createWorkId("ROOT1", "Series A")).not.toBe(createWorkId("ROOT1", "Series B"));
+  });
+
+  it("rootId が異なる場合は同一 workTitle でも異なる ID を生成する", () => {
+    expect(createWorkId("ROOT1", "Series A")).not.toBe(createWorkId("ROOT2", "Series A"));
   });
 
   it("22文字の base64url 文字列を返す", () => {
-    const id = createWorkId("Series A");
+    const id = createWorkId("ROOT1", "Series A");
     expect(id).toHaveLength(22);
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
   });

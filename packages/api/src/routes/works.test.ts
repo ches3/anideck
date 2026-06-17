@@ -10,6 +10,8 @@ import { BadRequestError, NotFoundError } from "../errors/index.ts";
 import { getWork, getWorkEpisode, listWorks } from "../lib/services/work.ts";
 import { createWorkId } from "../lib/work-id.ts";
 
+const ROOT_ID = "ROOT1";
+
 vi.mock("../lib/services/work.ts");
 
 const client = testClient(apiApp);
@@ -21,8 +23,8 @@ beforeEach(() => {
 describe("GET /works", () => {
   it("works 一覧を返す", async () => {
     const mockWorks = [
-      { id: createWorkId("Series A"), title: "Series A" },
-      { id: createWorkId("Series B"), title: "Series B" },
+      { id: createWorkId(ROOT_ID, "Series A"), title: "Series A" },
+      { id: createWorkId(ROOT_ID, "Series B"), title: "Series B" },
     ];
     vi.mocked(listWorks).mockResolvedValue(mockWorks);
 
@@ -47,7 +49,7 @@ describe("GET /works", () => {
 
 describe("GET /works/:workId", () => {
   it("work 詳細を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const mockWork = {
       id: workId,
       title: "Series A",
@@ -86,7 +88,7 @@ describe("GET /works/:workId", () => {
 
 describe("GET /works/:workId/episodes/:episodeId", () => {
   it("work・episode・streamUrl を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -112,7 +114,7 @@ describe("GET /works/:workId/episodes/:episodeId", () => {
   });
 
   it("service が NotFoundError を投げた場合は 404 を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     vi.mocked(getWorkEpisode).mockRejectedValue(new NotFoundError("episode が見つかりません"));
 
     const res = await client.works[":workId"].episodes[":episodeId"].$get({
@@ -140,7 +142,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("Range 未指定の場合は動画ファイル全体のバイト列を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -163,7 +165,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("Range: bytes=0-3 の場合は 206 で 0 バイト目から 3 バイト目までを返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -192,7 +194,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("Range: bytes=1- の場合は 206 で 1 バイト目から末尾までを返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -221,7 +223,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("Range: bytes=-3 の場合は 206 で末尾 3 バイトを返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -250,7 +252,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("不正な Range の場合は 416 を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -277,7 +279,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("複数 Range の場合は Range を無視して動画ファイル全体を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -308,7 +310,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   it("空ファイルに Range ヘッダー付きでリクエストした場合は 416 を返す", async () => {
     const emptyFilePath = join(tempFilePath, "..", "empty.mp4");
     await writeFile(emptyFilePath, "");
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -335,7 +337,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("動画ファイルが存在しない場合は 404 を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
       work: { id: workId, title: "Series A" },
@@ -356,7 +358,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
   });
 
   it("service が NotFoundError を投げた場合は 404 を返す", async () => {
-    const workId = createWorkId("Series A");
+    const workId = createWorkId(ROOT_ID, "Series A");
     vi.mocked(getWorkEpisode).mockRejectedValue(new NotFoundError("episode が見つかりません"));
 
     const res = await client.works[":workId"].episodes[":episodeId"].stream.$get({

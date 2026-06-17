@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 export const sourceRoots = sqliteTable("source_roots", {
@@ -38,9 +38,55 @@ export const sourceExcludeRules = sqliteTable(
   ],
 );
 
+export const works = sqliteTable(
+  "works",
+  {
+    id: text("id").primaryKey(),
+    rootId: text("root_id")
+      .notNull()
+      .references(() => sourceRoots.id, { onDelete: "cascade" }),
+    originalTitle: text("original_title").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [unique("unique_work_root_title").on(table.rootId, table.originalTitle)],
+);
+
+export const episodes = sqliteTable(
+  "episodes",
+  {
+    id: text("id").primaryKey(),
+    workId: text("work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    rootId: text("root_id")
+      .notNull()
+      .references(() => sourceRoots.id, { onDelete: "cascade" }),
+    relativePath: text("relative_path").notNull(),
+    originalWorkTitle: text("original_work_title").notNull(),
+    originalTitle: text("original_title").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`)
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [unique("unique_episode_path").on(table.rootId, table.relativePath)],
+);
+
 export const sourceRootsRelations = relations(sourceRoots, ({ many }) => ({
   includeRules: many(sourceIncludeRules),
   excludeRules: many(sourceExcludeRules),
+  works: many(works),
+  episodes: many(episodes),
 }));
 
 export const sourceIncludeRulesRelations = relations(sourceIncludeRules, ({ one }) => ({
@@ -57,9 +103,32 @@ export const sourceExcludeRulesRelations = relations(sourceExcludeRules, ({ one 
   }),
 }));
 
+export const worksRelations = relations(works, ({ one, many }) => ({
+  root: one(sourceRoots, {
+    fields: [works.rootId],
+    references: [sourceRoots.id],
+  }),
+  episodes: many(episodes),
+}));
+
+export const episodesRelations = relations(episodes, ({ one }) => ({
+  work: one(works, {
+    fields: [episodes.workId],
+    references: [works.id],
+  }),
+  root: one(sourceRoots, {
+    fields: [episodes.rootId],
+    references: [sourceRoots.id],
+  }),
+}));
+
 export type SourceRoot = typeof sourceRoots.$inferSelect;
 export type NewSourceRoot = typeof sourceRoots.$inferInsert;
 export type SourceIncludeRule = typeof sourceIncludeRules.$inferSelect;
 export type NewSourceIncludeRule = typeof sourceIncludeRules.$inferInsert;
 export type SourceExcludeRule = typeof sourceExcludeRules.$inferSelect;
 export type NewSourceExcludeRule = typeof sourceExcludeRules.$inferInsert;
+export type Work = typeof works.$inferSelect;
+export type NewWork = typeof works.$inferInsert;
+export type Episode = typeof episodes.$inferSelect;
+export type NewEpisode = typeof episodes.$inferInsert;
