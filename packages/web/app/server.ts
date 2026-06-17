@@ -6,7 +6,13 @@ const app = new Hono().route("/api", apiApp).all("/api/*", (c) => c.body(null, 4
 
 export { app };
 
+const hostname = process.env.HOSTNAME;
+
 export default createHonoServer({
   app,
   defaultLogger: false,
+  hostname,
+  listeningListener(info) {
+    console.log(`Server started on http://${info.address}:${info.port}`);
+  },
 });
