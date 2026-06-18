@@ -1,0 +1,1 @@
+CREATE INDEX `episodes_work_id_active_idx` ON `episodes` (`work_id`,`active`);

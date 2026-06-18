@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 export const sourceRoots = sqliteTable("source_roots", {
   id: text("id").primaryKey(),
@@ -90,7 +90,10 @@ export const episodes = sqliteTable(
       .default(sql`(unixepoch())`)
       .$onUpdate(() => new Date()),
   },
-  (table) => [unique("unique_episode_path").on(table.rootId, table.relativePath)],
+  (table) => [
+    unique("unique_episode_path").on(table.rootId, table.relativePath),
+    index("episodes_work_id_active_idx").on(table.workId, table.active),
+  ],
 );
 
 export const sourceRootsRelations = relations(sourceRoots, ({ many }) => ({
