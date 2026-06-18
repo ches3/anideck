@@ -36,6 +36,7 @@ function hasActiveEpisode(db: Db) {
 export interface WorkSummary {
   id: string;
   title: string;
+  thumbnailUrl: string | null;
 }
 
 export interface WorkEpisode {
@@ -94,6 +95,7 @@ export async function listWorks(db: Db): Promise<WorkSummary[]> {
     .select({
       id: works.id,
       title: workDisplayTitle,
+      thumbnailUrl: works.thumbnailUrl,
     })
     .from(works)
     .where(hasActiveEpisode(db))
@@ -128,6 +130,7 @@ export async function getWork(db: Db, workId: string): Promise<WorkDetail> {
   return {
     id: work.id,
     title: work.annictTitle ?? work.originalTitle,
+    thumbnailUrl: work.thumbnailUrl,
     episodes: rows
       .map((row) => ({
         id: row.id,
@@ -177,6 +180,7 @@ export async function getWorkEpisode(
     work: {
       id: work.id,
       title: work.annictTitle ?? work.originalTitle,
+      thumbnailUrl: work.thumbnailUrl,
     },
     episode: {
       id: episode.id,

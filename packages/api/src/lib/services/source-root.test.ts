@@ -101,6 +101,7 @@ describe("source-root service", () => {
         sync: {
           status: "success",
           annict: { status: "skipped", reason: "missing_token" },
+          thumbnail: { status: "skipped", reason: "missing_token" },
         },
       });
     } finally {

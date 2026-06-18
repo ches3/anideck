@@ -23,8 +23,8 @@ beforeEach(() => {
 describe("GET /works", () => {
   it("works 一覧を返す", async () => {
     const mockWorks = [
-      { id: createWorkId(ROOT_ID, "Series A"), title: "Series A" },
-      { id: createWorkId(ROOT_ID, "Series B"), title: "Series B" },
+      { id: createWorkId(ROOT_ID, "Series A"), title: "Series A", thumbnailUrl: null },
+      { id: createWorkId(ROOT_ID, "Series B"), title: "Series B", thumbnailUrl: null },
     ];
     vi.mocked(listWorks).mockResolvedValue(mockWorks);
 
@@ -53,6 +53,7 @@ describe("GET /works/:workId", () => {
     const mockWork = {
       id: workId,
       title: "Series A",
+      thumbnailUrl: null,
       episodes: [
         {
           id: "episode-id-1",
@@ -91,7 +92,7 @@ describe("GET /works/:workId/episodes/:episodeId", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -106,7 +107,7 @@ describe("GET /works/:workId/episodes/:episodeId", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json).toEqual({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: { id: episodeId, title: "#01" },
       streamUrl: `/api/works/${workId}/episodes/${episodeId}/stream`,
     });
@@ -145,7 +146,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -168,7 +169,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -197,7 +198,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -226,7 +227,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -255,7 +256,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -282,7 +283,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -313,7 +314,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -340,7 +341,7 @@ describe("GET /works/:workId/episodes/:episodeId/stream", () => {
     const workId = createWorkId(ROOT_ID, "Series A");
     const episodeId = "episode-id-1";
     vi.mocked(getWorkEpisode).mockResolvedValue({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",

@@ -21,6 +21,7 @@ vi.mock("./source-file.ts", () => ({
 
 const ROOT_ID = "ROOT1";
 const ANNICT_SKIPPED = { status: "skipped", reason: "missing_token" } as const;
+const THUMBNAIL_SKIPPED = { status: "skipped", reason: "missing_token" } as const;
 
 function scannedEpisode(input: {
   relativePath: string;
@@ -463,7 +464,9 @@ describe("applyCatalogDiff", () => {
     ]);
 
     const listedWorks = await listWorks(db);
-    expect(listedWorks).toEqual([{ id: createWorkId(ROOT_ID, "Series A"), title: "Series A" }]);
+    expect(listedWorks).toEqual([
+      { id: createWorkId(ROOT_ID, "Series A"), title: "Series A", thumbnailUrl: null },
+    ]);
   });
 
   it("他の source root に active なエピソードがある作品は一覧に表示し続ける", async () => {
@@ -505,7 +508,9 @@ describe("applyCatalogDiff", () => {
     await runSync(db, []);
 
     const listedWorks = await listWorks(db);
-    expect(listedWorks).toEqual([{ id: createWorkId(root2Id, "Series A"), title: "Series A" }]);
+    expect(listedWorks).toEqual([
+      { id: createWorkId(root2Id, "Series A"), title: "Series A", thumbnailUrl: null },
+    ]);
   });
 
   it("複数 source root の同じ作品タイトルは root ごとに別作品として扱う", async () => {
@@ -655,7 +660,7 @@ describe("syncSourceRootCatalog", () => {
 
     const result = await syncSourceRootCatalog(db, ROOT_ID);
 
-    expect(result).toEqual({ annict: ANNICT_SKIPPED });
+    expect(result).toEqual({ annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED });
 
     const rows = await db.select().from(episodes);
     expect(rows).toHaveLength(1);
@@ -716,11 +721,11 @@ describe("syncAllSourceRootCatalogs", () => {
       roots: [
         {
           rootId: ROOT_ID,
-          sync: { status: "success", annict: ANNICT_SKIPPED },
+          sync: { status: "success", annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED },
         },
         {
           rootId: root2Id,
-          sync: { status: "success", annict: ANNICT_SKIPPED },
+          sync: { status: "success", annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED },
         },
       ],
     });

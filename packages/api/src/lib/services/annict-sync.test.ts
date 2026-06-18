@@ -268,4 +268,43 @@ describe("syncAnnictTitles", () => {
     });
     expect(episode?.annictStatus).toBe("matched");
   });
+
+  it("annictWorkId が変わった場合はサムネイル情報をクリアする", async () => {
+    const { workId } = await seedEpisode(db, {
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+    });
+
+    await db
+      .update(works)
+      .set({
+        annictWorkId: "work-old",
+        malAnimeId: 12345,
+        thumbnailUrl: "https://example.com/thumbnail.jpg",
+        thumbnailStatus: "found",
+      })
+      .where(eq(works.id, workId));
+
+    vi.mocked(search).mockResolvedValue({
+      id: "work-new",
+      title: "Annict Work",
+      episode: {
+        id: "episode-1",
+        title: "Annict Episode",
+        number: 1,
+        numberText: "#01",
+      },
+    });
+
+    await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+
+    const work = await db.query.works.findFirst({ where: eq(works.id, workId) });
+    expect(work).toMatchObject({
+      annictWorkId: "work-new",
+      malAnimeId: null,
+      thumbnailUrl: null,
+      thumbnailStatus: null,
+    });
+  });
 });

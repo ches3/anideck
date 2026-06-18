@@ -48,6 +48,9 @@ export const works = sqliteTable(
     originalTitle: text("original_title").notNull(),
     annictWorkId: text("annict_work_id"),
     annictTitle: text("annict_title"),
+    malAnimeId: integer("mal_anime_id"),
+    thumbnailUrl: text("thumbnail_url"),
+    thumbnailStatus: text("thumbnail_status", { enum: ["found", "not_found", "error"] }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),

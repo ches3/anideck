@@ -107,9 +107,9 @@ describe("listWorks", () => {
     const result = await listWorks(db);
 
     expect(result).toEqual([
-      { id: createWorkId(ROOT1_ID, "Series A"), title: "Series A" },
-      { id: createWorkId(ROOT2_ID, "Series A"), title: "Series A" },
-      { id: createWorkId(ROOT1_ID, "Series B"), title: "Series B" },
+      { id: createWorkId(ROOT1_ID, "Series A"), title: "Series A", thumbnailUrl: null },
+      { id: createWorkId(ROOT2_ID, "Series A"), title: "Series A", thumbnailUrl: null },
+      { id: createWorkId(ROOT1_ID, "Series B"), title: "Series B", thumbnailUrl: null },
     ]);
   });
 
@@ -143,6 +143,7 @@ describe("getWork", () => {
     expect(work).toEqual({
       id: workId,
       title: "Series A",
+      thumbnailUrl: null,
       episodes: [
         {
           id: createEpisodeId(ROOT1_ID, "Series A/#01.mp4"),
@@ -372,7 +373,7 @@ describe("getWorkEpisode", () => {
     const detail = await getWorkEpisode(db, workId, episodeId);
 
     expect(detail).toEqual({
-      work: { id: workId, title: "Series A" },
+      work: { id: workId, title: "Series A", thumbnailUrl: null },
       episode: {
         id: episodeId,
         title: "#01",
@@ -447,7 +448,7 @@ describe("annict title fallback", () => {
     });
 
     const listed = await listWorks(db);
-    expect(listed).toEqual([{ id: workId, title: "Annict Series A" }]);
+    expect(listed).toEqual([{ id: workId, title: "Annict Series A", thumbnailUrl: null }]);
 
     const work = await getWork(db, workId);
     expect(work.title).toBe("Annict Series A");

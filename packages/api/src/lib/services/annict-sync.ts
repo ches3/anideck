@@ -44,11 +44,27 @@ export async function updateWorkAnnict(
     annictTitle: string;
   },
 ): Promise<void> {
+  const existing = await db.query.works.findFirst({
+    where: eq(works.id, workId),
+  });
+
+  const annictWorkIdChanged =
+    existing !== undefined &&
+    existing.annictWorkId !== null &&
+    existing.annictWorkId !== data.annictWorkId;
+
   await db
     .update(works)
     .set({
       annictWorkId: data.annictWorkId,
       annictTitle: data.annictTitle,
+      ...(annictWorkIdChanged
+        ? {
+            malAnimeId: null,
+            thumbnailUrl: null,
+            thumbnailStatus: null,
+          }
+        : {}),
     })
     .where(eq(works.id, workId));
 }
@@ -141,7 +157,8 @@ export async function syncAnnictTitles(
       matched += 1;
 
       await new Promise((resolve) => setTimeout(resolve, 300));
-    } catch {
+    } catch (e) {
+      console.error(e);
       await updateEpisodeAnnictStatus(db, episode.id, "error");
       error += 1;
     }

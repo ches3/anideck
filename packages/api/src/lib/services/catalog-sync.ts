@@ -11,6 +11,7 @@ import {
   type AnnictSyncResult,
 } from "./annict-sync.ts";
 import type { SourceFileRecord } from "./source-file.ts";
+import { syncWorkThumbnails, type ThumbnailSyncResult } from "./thumbnail-sync.ts";
 
 export interface ScannedEpisode {
   rootId: string;
@@ -34,6 +35,7 @@ export type CatalogSyncStatus =
   | {
       status: "success";
       annict: AnnictSyncResult;
+      thumbnail: ThumbnailSyncResult;
     }
   | {
       status: "failed";
@@ -42,6 +44,7 @@ export type CatalogSyncStatus =
 
 export interface CatalogSyncResult {
   annict: AnnictSyncResult;
+  thumbnail: ThumbnailSyncResult;
 }
 
 function createEpisodeKey(rootId: string, relativePath: string): string {
@@ -187,7 +190,12 @@ export async function syncSourceRootCatalog(db: Db, rootId: string): Promise<Cat
     token: getAnnictToken() ?? "",
   });
 
-  return { annict };
+  const thumbnail = await syncWorkThumbnails(db, {
+    rootId,
+    token: getAnnictToken() ?? "",
+  });
+
+  return { annict, thumbnail };
 }
 
 export async function trySyncSourceRootCatalog(db: Db, rootId: string): Promise<CatalogSyncStatus> {
@@ -196,6 +204,7 @@ export async function trySyncSourceRootCatalog(db: Db, rootId: string): Promise<
     return {
       status: "success",
       annict: result.annict,
+      thumbnail: result.thumbnail,
     };
   } catch (error) {
     console.error("Catalog sync failed", error);

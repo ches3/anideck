@@ -15,7 +15,7 @@ describe("WorksList", () => {
   it("作品がある場合はカードリンクが表示される", () => {
     render(
       <MemoryRouter>
-        <WorksList works={[{ id: "work-1", title: "ぼっち・ざ・ろっく!" }]} />
+        <WorksList works={[{ id: "work-1", title: "ぼっち・ざ・ろっく!", thumbnailUrl: null }]} />
       </MemoryRouter>,
     );
 

@@ -11,6 +11,7 @@ const client = testClient(apiApp);
 const mockSyncResult = {
   status: "success" as const,
   annict: { status: "skipped", reason: "missing_token" } as const,
+  thumbnail: { status: "skipped", reason: "missing_token" } as const,
 };
 
 beforeEach(() => {
