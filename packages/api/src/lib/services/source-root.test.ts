@@ -100,6 +100,7 @@ describe("source-root service", () => {
         path: updatedDir,
         sync: {
           status: "success",
+          annict: { status: "skipped", reason: "missing_token" },
         },
       });
     } finally {

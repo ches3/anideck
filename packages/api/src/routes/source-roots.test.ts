@@ -26,6 +26,7 @@ vi.mock("../lib/services/catalog-sync.ts");
 const client = testClient(apiApp);
 const mockSyncResult = {
   status: "success" as const,
+  annict: { status: "skipped", reason: "missing_token" } as const,
 };
 
 beforeEach(() => {
@@ -88,7 +89,10 @@ describe("POST /source-roots/sync", () => {
       roots: [
         {
           rootId: "ROOT1",
-          sync: { status: "success" as const },
+          sync: {
+            status: "success" as const,
+            annict: { status: "skipped", reason: "missing_token" } as const,
+          },
         },
       ],
     };

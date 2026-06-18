@@ -46,6 +46,8 @@ export const works = sqliteTable(
       .notNull()
       .references(() => sourceRoots.id, { onDelete: "cascade" }),
     originalTitle: text("original_title").notNull(),
+    annictWorkId: text("annict_work_id"),
+    annictTitle: text("annict_title"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),
@@ -71,6 +73,12 @@ export const episodes = sqliteTable(
     originalWorkTitle: text("original_work_title").notNull(),
     originalTitle: text("original_title").notNull(),
     active: integer("active", { mode: "boolean" }).notNull(),
+    annictEpisodeId: text("annict_episode_id"),
+    annictTitle: text("annict_title"),
+    annictEpisodeNumber: integer("annict_episode_number"),
+    annictEpisodeNumberText: text("annict_episode_number_text"),
+    annictNoEpisodes: integer("annict_no_episodes", { mode: "boolean" }),
+    annictStatus: text("annict_status", { enum: ["matched", "not_found", "error"] }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),

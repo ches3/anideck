@@ -6,9 +6,10 @@ export default defineConfig({
   },
   fmt: {
     sortImports: true,
-    ignorePatterns: ["packages/api/drizzle/**"],
+    ignorePatterns: ["packages/api/drizzle/**", "vendor/**"],
   },
   lint: {
+    ignorePatterns: ["vendor/**"],
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",

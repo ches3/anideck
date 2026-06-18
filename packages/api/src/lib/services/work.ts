@@ -6,6 +6,24 @@ import { createEpisodeNotFoundError, createWorkNotFoundError } from "../../error
 import type { Db } from "../db/index.ts";
 import { episodes, sourceRoots, works } from "../db/schema.ts";
 
+const workDisplayTitle = sql<string>`coalesce(${works.annictTitle}, ${works.originalTitle})`;
+
+interface EpisodeTitleFields {
+  annictEpisodeNumberText: string | null;
+  annictTitle: string | null;
+  originalTitle: string;
+}
+
+export function resolveEpisodeDisplayTitle(episode: EpisodeTitleFields): string {
+  if (episode.annictEpisodeNumberText !== null && episode.annictTitle !== null) {
+    return `${episode.annictEpisodeNumberText} ${episode.annictTitle}`;
+  }
+  if (episode.annictTitle !== null) {
+    return episode.annictTitle;
+  }
+  return episode.originalTitle;
+}
+
 function hasActiveEpisode(db: Db) {
   return exists(
     db
@@ -35,15 +53,51 @@ export interface WorkEpisodeDetail {
   episode: WorkEpisode;
 }
 
+interface EpisodeSortFields {
+  annictEpisodeNumber: number | null;
+  annictEpisodeNumberText: string | null;
+  originalTitle: string;
+}
+
+function compareNumericStrings(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
+export function compareEpisodes(a: EpisodeSortFields, b: EpisodeSortFields): number {
+  if (a.annictEpisodeNumber !== null && b.annictEpisodeNumber !== null) {
+    const diff = a.annictEpisodeNumber - b.annictEpisodeNumber;
+    if (diff !== 0) {
+      return diff;
+    }
+  } else if (a.annictEpisodeNumber !== null) {
+    return -1;
+  } else if (b.annictEpisodeNumber !== null) {
+    return 1;
+  }
+
+  if (a.annictEpisodeNumberText !== null && b.annictEpisodeNumberText !== null) {
+    const diff = compareNumericStrings(a.annictEpisodeNumberText, b.annictEpisodeNumberText);
+    if (diff !== 0) {
+      return diff;
+    }
+  } else if (a.annictEpisodeNumberText !== null) {
+    return -1;
+  } else if (b.annictEpisodeNumberText !== null) {
+    return 1;
+  }
+
+  return compareNumericStrings(a.originalTitle, b.originalTitle);
+}
+
 export async function listWorks(db: Db): Promise<WorkSummary[]> {
   const rows = await db
     .select({
       id: works.id,
-      title: works.originalTitle,
+      title: workDisplayTitle,
     })
     .from(works)
     .where(hasActiveEpisode(db))
-    .orderBy(asc(works.originalTitle), asc(works.rootId));
+    .orderBy(asc(workDisplayTitle), asc(works.rootId));
 
   return rows;
 }
@@ -60,7 +114,10 @@ export async function getWork(db: Db, workId: string): Promise<WorkDetail> {
   const rows = await db
     .select({
       id: episodes.id,
-      title: episodes.originalTitle,
+      annictTitle: episodes.annictTitle,
+      annictEpisodeNumber: episodes.annictEpisodeNumber,
+      annictEpisodeNumberText: episodes.annictEpisodeNumberText,
+      originalTitle: episodes.originalTitle,
       rootPath: sourceRoots.path,
       relativePath: episodes.relativePath,
     })
@@ -70,14 +127,18 @@ export async function getWork(db: Db, workId: string): Promise<WorkDetail> {
 
   return {
     id: work.id,
-    title: work.originalTitle,
+    title: work.annictTitle ?? work.originalTitle,
     episodes: rows
       .map((row) => ({
         id: row.id,
-        title: row.title,
+        title: resolveEpisodeDisplayTitle(row),
         path: join(row.rootPath, row.relativePath),
+        annictEpisodeNumber: row.annictEpisodeNumber,
+        annictEpisodeNumberText: row.annictEpisodeNumberText,
+        originalTitle: row.originalTitle,
       }))
-      .sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true })),
+      .sort(compareEpisodes)
+      .map(({ id, title, path }) => ({ id, title, path })),
   };
 }
 
@@ -97,7 +158,9 @@ export async function getWorkEpisode(
   const episode = await db
     .select({
       id: episodes.id,
-      title: episodes.originalTitle,
+      annictTitle: episodes.annictTitle,
+      annictEpisodeNumberText: episodes.annictEpisodeNumberText,
+      originalTitle: episodes.originalTitle,
       rootPath: sourceRoots.path,
       relativePath: episodes.relativePath,
     })
@@ -113,11 +176,11 @@ export async function getWorkEpisode(
   return {
     work: {
       id: work.id,
-      title: work.originalTitle,
+      title: work.annictTitle ?? work.originalTitle,
     },
     episode: {
       id: episode.id,
-      title: episode.title,
+      title: resolveEpisodeDisplayTitle(episode),
       path: join(episode.rootPath, episode.relativePath),
     },
   };

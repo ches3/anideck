@@ -10,6 +10,7 @@ vi.mock("../lib/services/source-rule.ts");
 const client = testClient(apiApp);
 const mockSyncResult = {
   status: "success" as const,
+  annict: { status: "skipped", reason: "missing_token" } as const,
 };
 
 beforeEach(() => {

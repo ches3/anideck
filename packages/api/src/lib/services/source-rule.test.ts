@@ -22,6 +22,7 @@ vi.mock("./catalog-sync.ts", () => ({
 
 const SYNC_SUCCESS = {
   status: "success" as const,
+  annict: { status: "skipped", reason: "missing_token" } as const,
 };
 
 describe("source-rule service", () => {

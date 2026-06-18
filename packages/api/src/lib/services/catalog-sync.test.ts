@@ -20,6 +20,7 @@ vi.mock("./source-file.ts", () => ({
 }));
 
 const ROOT_ID = "ROOT1";
+const ANNICT_SKIPPED = { status: "skipped", reason: "missing_token" } as const;
 
 function scannedEpisode(input: {
   relativePath: string;
@@ -171,6 +172,95 @@ describe("applyCatalogDiff", () => {
     });
   });
 
+  it("inactive なエピソードが同じタイトルで復帰した場合は Annict データを維持する", async () => {
+    await db.insert(works).values({
+      id: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: createEpisodeId(ROOT_ID, "Series A/#01.mp4"),
+      workId: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      active: false,
+      annictStatus: "matched",
+      annictTitle: "Annict Episode",
+      annictEpisodeId: "episode-1",
+      annictEpisodeNumber: 1,
+      annictEpisodeNumberText: "#01",
+      annictNoEpisodes: false,
+    });
+
+    await runSync(db, [
+      scannedEpisode({
+        relativePath: "Series A/#01.mp4",
+        originalWorkTitle: "Series A",
+        originalTitle: "#01",
+      }),
+    ]);
+
+    const row = await db.query.episodes.findFirst({
+      where: eq(episodes.id, createEpisodeId(ROOT_ID, "Series A/#01.mp4")),
+    });
+    expect(row).toMatchObject({
+      active: true,
+      annictStatus: "matched",
+      annictTitle: "Annict Episode",
+      annictEpisodeId: "episode-1",
+      annictEpisodeNumber: 1,
+      annictEpisodeNumberText: "#01",
+      annictNoEpisodes: false,
+    });
+  });
+
+  it("inactive なエピソードが別タイトルで復帰した場合は Annict データをクリアする", async () => {
+    await db.insert(works).values({
+      id: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: createEpisodeId(ROOT_ID, "Series A/#01.mp4"),
+      workId: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01 old",
+      active: false,
+      annictStatus: "matched",
+      annictTitle: "Annict Episode",
+      annictEpisodeId: "episode-1",
+      annictEpisodeNumber: 1,
+      annictEpisodeNumberText: "#01",
+      annictNoEpisodes: false,
+    });
+
+    await runSync(db, [
+      scannedEpisode({
+        relativePath: "Series A/#01.mp4",
+        originalWorkTitle: "Series A",
+        originalTitle: "#01 new",
+      }),
+    ]);
+
+    const row = await db.query.episodes.findFirst({
+      where: eq(episodes.id, createEpisodeId(ROOT_ID, "Series A/#01.mp4")),
+    });
+    expect(row).toMatchObject({
+      active: true,
+      originalTitle: "#01 new",
+      annictEpisodeId: null,
+      annictTitle: null,
+      annictEpisodeNumber: null,
+      annictEpisodeNumberText: null,
+      annictNoEpisodes: null,
+      annictStatus: null,
+    });
+  });
+
   it("タイトルに変更がない episode は更新しない", async () => {
     await db.insert(works).values({
       id: createWorkId(ROOT_ID, "Series A"),
@@ -280,6 +370,50 @@ describe("applyCatalogDiff", () => {
       where: eq(episodes.id, createEpisodeId(ROOT_ID, "Series A/#01.mp4")),
     });
     expect(row?.originalTitle).toBe("#01 new");
+  });
+
+  it("タイトル変更時は Annict データをクリアする", async () => {
+    await db.insert(works).values({
+      id: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: createEpisodeId(ROOT_ID, "Series A/#01.mp4"),
+      workId: createWorkId(ROOT_ID, "Series A"),
+      rootId: ROOT_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01 old",
+      active: true,
+      annictStatus: "matched",
+      annictTitle: "Annict Episode",
+      annictEpisodeId: "episode-1",
+      annictEpisodeNumber: 1,
+      annictEpisodeNumberText: "#01",
+      annictNoEpisodes: false,
+    });
+
+    await runSync(db, [
+      scannedEpisode({
+        relativePath: "Series A/#01.mp4",
+        originalWorkTitle: "Series A",
+        originalTitle: "#01 new",
+      }),
+    ]);
+
+    const row = await db.query.episodes.findFirst({
+      where: eq(episodes.id, createEpisodeId(ROOT_ID, "Series A/#01.mp4")),
+    });
+    expect(row).toMatchObject({
+      originalTitle: "#01 new",
+      annictEpisodeId: null,
+      annictTitle: null,
+      annictEpisodeNumber: null,
+      annictEpisodeNumberText: null,
+      annictNoEpisodes: null,
+      annictStatus: null,
+    });
   });
 
   it("active なエピソードがなくなった作品は一覧に表示しない", async () => {
@@ -519,7 +653,9 @@ describe("syncSourceRootCatalog", () => {
       },
     ]);
 
-    await syncSourceRootCatalog(db, ROOT_ID);
+    const result = await syncSourceRootCatalog(db, ROOT_ID);
+
+    expect(result).toEqual({ annict: ANNICT_SKIPPED });
 
     const rows = await db.select().from(episodes);
     expect(rows).toHaveLength(1);
@@ -580,11 +716,11 @@ describe("syncAllSourceRootCatalogs", () => {
       roots: [
         {
           rootId: ROOT_ID,
-          sync: { status: "success" },
+          sync: { status: "success", annict: ANNICT_SKIPPED },
         },
         {
           rootId: root2Id,
-          sync: { status: "success" },
+          sync: { status: "success", annict: ANNICT_SKIPPED },
         },
       ],
     });

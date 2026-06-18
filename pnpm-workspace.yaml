@@ -1,5 +1,6 @@
 packages:
   - "packages/*"
+  - "vendor/anirec/packages/annict"
 
 catalog:
   "@types/node": ^25.9.2

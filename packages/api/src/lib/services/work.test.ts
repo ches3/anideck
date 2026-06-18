@@ -158,7 +158,7 @@ describe("getWork", () => {
     });
   });
 
-  it("episodes を title の localeCompare（numeric）でソートして返す", async () => {
+  it("Annict データがないエピソードは originalTitle の localeCompare でソートして返す", async () => {
     const workId = createWorkId(ROOT1_ID, "Sort Test");
     await db.insert(works).values({
       id: workId,
@@ -207,6 +207,130 @@ describe("getWork", () => {
     const work = await getWork(db, workId);
 
     expect(work.episodes.map((episode) => episode.title)).toEqual(["#01", "#02", "#2", "#10"]);
+  });
+
+  it("エピソードを annictEpisodeNumber 優先でソートして返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Sort Test");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Sort Test",
+    });
+    await db.insert(episodes).values([
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/ep3.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/ep3.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "第3話",
+        annictEpisodeNumber: 3,
+        active: true,
+      },
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/ep1.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/ep1.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "第1話",
+        annictEpisodeNumber: 1,
+        active: true,
+      },
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/ep2.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/ep2.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "第2話",
+        annictEpisodeNumber: 2,
+        active: true,
+      },
+    ]);
+
+    const work = await getWork(db, workId);
+
+    expect(work.episodes.map((episode) => episode.title)).toEqual(["第1話", "第2話", "第3話"]);
+  });
+
+  it("annictEpisodeNumber がないエピソードは annictEpisodeNumberText でソートして返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Sort Test");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Sort Test",
+    });
+    await db.insert(episodes).values([
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/#10.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/#10.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "file10",
+        annictEpisodeNumberText: "#10",
+        active: true,
+      },
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/#01.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/#01.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "file01",
+        annictEpisodeNumberText: "#01",
+        active: true,
+      },
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/#02.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/#02.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "file02",
+        annictEpisodeNumberText: "#02",
+        active: true,
+      },
+    ]);
+
+    const work = await getWork(db, workId);
+
+    expect(work.episodes.map((episode) => episode.title)).toEqual(["file01", "file02", "file10"]);
+  });
+
+  it("annictEpisodeNumber があるエピソードを Annict データがないエピソードより先に並べる", async () => {
+    const workId = createWorkId(ROOT1_ID, "Sort Test");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Sort Test",
+    });
+    await db.insert(episodes).values([
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/no-annict.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/no-annict.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "#01",
+        active: true,
+      },
+      {
+        id: createEpisodeId(ROOT1_ID, "Sort Test/with-number.mp4"),
+        workId,
+        rootId: ROOT1_ID,
+        relativePath: "Sort Test/with-number.mp4",
+        originalWorkTitle: "Sort Test",
+        originalTitle: "第2話",
+        annictEpisodeNumber: 2,
+        active: true,
+      },
+    ]);
+
+    const work = await getWork(db, workId);
+
+    expect(work.episodes.map((episode) => episode.title)).toEqual(["第2話", "#01"]);
   });
 
   it("inactive な episode は episodes から除外する", async () => {
@@ -286,5 +410,165 @@ describe("getWorkEpisode", () => {
     await expect(getWorkEpisode(db, workId, "missing-episode-id")).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+});
+
+describe("annict title fallback", () => {
+  let db: Db;
+  let testDb: TestDb | undefined;
+
+  beforeEach(async () => {
+    testDb = await createTestDb();
+    db = testDb.db;
+    await db.insert(sourceRoots).values({ id: ROOT1_ID, path: "/media/anime1" });
+  });
+
+  afterEach(async () => {
+    await testDb?.cleanup();
+    testDb = undefined;
+  });
+
+  it("Annict のデータがある場合は Annict タイトルを返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+      annictTitle: "Annict Series A",
+    });
+    await db.insert(episodes).values({
+      id: createEpisodeId(ROOT1_ID, "Series A/#01.mp4"),
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      active: true,
+    });
+
+    const listed = await listWorks(db);
+    expect(listed).toEqual([{ id: workId, title: "Annict Series A" }]);
+
+    const work = await getWork(db, workId);
+    expect(work.title).toBe("Annict Series A");
+  });
+
+  it("Annict のデータがない場合は originalTitle を返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: createEpisodeId(ROOT1_ID, "Series A/#01.mp4"),
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      active: true,
+    });
+
+    const work = await getWork(db, workId);
+    expect(work.title).toBe("Series A");
+  });
+
+  it("Annictの episodeNumberText と title がある場合は結合タイトルを返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    const episodeId = createEpisodeId(ROOT1_ID, "Series A/#01.mp4");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: episodeId,
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      annictEpisodeNumberText: "#01",
+      annictTitle: "起・終わりの続き",
+      active: true,
+    });
+
+    const work = await getWork(db, workId);
+    expect(work.episodes[0]?.title).toBe("#01 起・終わりの続き");
+
+    const detail = await getWorkEpisode(db, workId, episodeId);
+    expect(detail.episode.title).toBe("#01 起・終わりの続き");
+  });
+
+  it("Annict のデータがある場合は Annict タイトルを返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    const episodeId = createEpisodeId(ROOT1_ID, "Series A/#01.mp4");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: episodeId,
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      annictTitle: "Annict #01",
+      active: true,
+    });
+
+    const work = await getWork(db, workId);
+    expect(work.episodes[0]?.title).toBe("Annict #01");
+
+    const detail = await getWorkEpisode(db, workId, episodeId);
+    expect(detail.episode.title).toBe("Annict #01");
+  });
+
+  it("Annict の episodeNumberText のみある場合は originalTitle を返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    const episodeId = createEpisodeId(ROOT1_ID, "Series A/#01.mp4");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: episodeId,
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      annictEpisodeNumberText: "#01",
+      active: true,
+    });
+
+    const detail = await getWorkEpisode(db, workId, episodeId);
+    expect(detail.episode.title).toBe("#01");
+  });
+
+  it("Annict のデータがない場合は originalTitle を返す", async () => {
+    const workId = createWorkId(ROOT1_ID, "Series A");
+    const episodeId = createEpisodeId(ROOT1_ID, "Series A/#01.mp4");
+    await db.insert(works).values({
+      id: workId,
+      rootId: ROOT1_ID,
+      originalTitle: "Series A",
+    });
+    await db.insert(episodes).values({
+      id: episodeId,
+      workId,
+      rootId: ROOT1_ID,
+      relativePath: "Series A/#01.mp4",
+      originalWorkTitle: "Series A",
+      originalTitle: "#01",
+      active: true,
+    });
+
+    const detail = await getWorkEpisode(db, workId, episodeId);
+    expect(detail.episode.title).toBe("#01");
   });
 });

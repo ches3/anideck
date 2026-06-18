@@ -1,9 +1,15 @@
 import { eq } from "drizzle-orm";
 
 import { AppError } from "../../errors/index.ts";
+import { getAnnictToken } from "../annict.ts";
 import type { Db, DbOrTransaction } from "../db/index.ts";
 import { episodes, works } from "../db/schema.ts";
 import { createEpisodeId, createWorkId } from "../work-id.ts";
+import {
+  clearEpisodeAnnictFields,
+  syncAnnictTitles,
+  type AnnictSyncResult,
+} from "./annict-sync.ts";
 import type { SourceFileRecord } from "./source-file.ts";
 
 export interface ScannedEpisode {
@@ -27,11 +33,16 @@ export interface AllCatalogSyncResult {
 export type CatalogSyncStatus =
   | {
       status: "success";
+      annict: AnnictSyncResult;
     }
   | {
       status: "failed";
       error: string;
     };
+
+export interface CatalogSyncResult {
+  annict: AnnictSyncResult;
+}
 
 function createEpisodeKey(rootId: string, relativePath: string): string {
   return `${rootId}\0${relativePath}`;
@@ -106,6 +117,7 @@ export async function applyCatalogDiff(
 
     if (!existing.active) {
       const workId = await ensureWork(tx, rootId, scanned.originalWorkTitle);
+      const shouldClearAnnict = hasTitleChanged(existing, scanned);
       await tx
         .update(episodes)
         .set({
@@ -113,6 +125,7 @@ export async function applyCatalogDiff(
           originalWorkTitle: scanned.originalWorkTitle,
           originalTitle: scanned.originalTitle,
           active: true,
+          ...(shouldClearAnnict ? clearEpisodeAnnictFields : {}),
         })
         .where(eq(episodes.id, existing.id));
       continue;
@@ -126,6 +139,7 @@ export async function applyCatalogDiff(
           workId,
           originalWorkTitle: scanned.originalWorkTitle,
           originalTitle: scanned.originalTitle,
+          ...clearEpisodeAnnictFields,
         })
         .where(eq(episodes.id, existing.id));
     }
@@ -161,19 +175,27 @@ export function buildScannedEpisodeMap(
   return scannedEpisodes;
 }
 
-export async function syncSourceRootCatalog(db: Db, rootId: string): Promise<void> {
+export async function syncSourceRootCatalog(db: Db, rootId: string): Promise<CatalogSyncResult> {
   const { listSourceFiles } = await import("./source-file.ts");
   const files = await listSourceFiles(db, rootId);
   const scannedEpisodes = buildScannedEpisodeMap(rootId, files);
 
-  return db.transaction(async (tx) => applyCatalogDiff(tx, rootId, scannedEpisodes));
+  await db.transaction(async (tx) => applyCatalogDiff(tx, rootId, scannedEpisodes));
+
+  const annict = await syncAnnictTitles(db, {
+    rootId,
+    token: getAnnictToken() ?? "",
+  });
+
+  return { annict };
 }
 
 export async function trySyncSourceRootCatalog(db: Db, rootId: string): Promise<CatalogSyncStatus> {
   try {
-    await syncSourceRootCatalog(db, rootId);
+    const result = await syncSourceRootCatalog(db, rootId);
     return {
       status: "success",
+      annict: result.annict,
     };
   } catch (error) {
     console.error("Catalog sync failed", error);

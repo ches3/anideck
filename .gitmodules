@@ -1,0 +1,3 @@
+[submodule "vendor/anirec"]
+	path = vendor/anirec
+	url = https://github.com/ches3/anirec
