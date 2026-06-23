@@ -4,15 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { apiApp } from "../app.ts";
 import { ConflictError, NotFoundError } from "../errors/index.ts";
 import { deleteSourceIncludeRule, updateSourceIncludeRule } from "../lib/services/source-rule.ts";
+import { triggerSourceSync } from "../lib/services/sync/orchestrator.ts";
 
 vi.mock("../lib/services/source-rule.ts");
+vi.mock("../lib/services/sync/orchestrator.ts");
 
 const client = testClient(apiApp);
-const mockSyncResult = {
-  status: "success" as const,
-  annict: { status: "skipped", reason: "missing_token" } as const,
-  thumbnail: { status: "skipped", reason: "missing_token" } as const,
-};
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -26,7 +23,7 @@ describe("PATCH /source-include-rules/:ruleId", () => {
       pattern: "updated",
       sortOrder: 1,
     };
-    vi.mocked(updateSourceIncludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
+    vi.mocked(updateSourceIncludeRule).mockResolvedValue(mockRule);
 
     const res = await client["source-include-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -35,7 +32,8 @@ describe("PATCH /source-include-rules/:ruleId", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ includeRule: mockRule, sync: mockSyncResult });
+    expect(json).toEqual({ includeRule: mockRule });
+    expect(triggerSourceSync).toHaveBeenCalledWith(expect.anything(), "ROOT1");
   });
 
   it("service が NotFoundError を投げた場合は 404 を返す", async () => {
@@ -102,7 +100,7 @@ describe("PATCH /source-include-rules/:ruleId", () => {
       pattern: "updated",
       sortOrder: 0,
     };
-    vi.mocked(updateSourceIncludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
+    vi.mocked(updateSourceIncludeRule).mockResolvedValue(mockRule);
 
     const res = await client["source-include-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -122,7 +120,7 @@ describe("PATCH /source-include-rules/:ruleId", () => {
       pattern: "pattern",
       sortOrder: 1,
     };
-    vi.mocked(updateSourceIncludeRule).mockResolvedValue({ ...mockRule, sync: mockSyncResult });
+    vi.mocked(updateSourceIncludeRule).mockResolvedValue(mockRule);
 
     const res = await client["source-include-rules"][":ruleId"].$patch({
       param: { ruleId: "RULE1" },
@@ -147,15 +145,14 @@ describe("PATCH /source-include-rules/:ruleId", () => {
 
 describe("DELETE /source-include-rules/:ruleId", () => {
   it("includeRule を削除できる", async () => {
-    vi.mocked(deleteSourceIncludeRule).mockResolvedValue({ sync: mockSyncResult });
+    vi.mocked(deleteSourceIncludeRule).mockResolvedValue("ROOT1");
 
     const res = await client["source-include-rules"][":ruleId"].$delete({
       param: { ruleId: "RULE1" },
     });
 
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json).toEqual({ sync: mockSyncResult });
+    expect(res.status).toBe(204);
     expect(deleteSourceIncludeRule).toHaveBeenCalledWith(expect.anything(), "RULE1");
+    expect(triggerSourceSync).toHaveBeenCalledWith(expect.anything(), "ROOT1");
   });
 });

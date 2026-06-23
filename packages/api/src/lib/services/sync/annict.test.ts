@@ -1,14 +1,26 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Db } from "../db/index.ts";
-import { type Episode, episodes, sourceRoots, works } from "../db/schema.ts";
-import { createTestDb, type TestDb } from "../db/test-helper.ts";
-import { createEpisodeId, createWorkId } from "../work-id.ts";
-import { syncAnnictTitles } from "./annict-sync.ts";
+import type { Db } from "../../db/index.ts";
+import { type Episode, episodes, sourceRoots, works } from "../../db/schema.ts";
+import { createTestDb, type TestDb } from "../../db/test-helper.ts";
+import { createEpisodeId, createWorkId } from "../../work-id.ts";
+import { refreshAnnictEpisode } from "./annict.ts";
+
+const { mockGetAnnictToken } = vi.hoisted(() => ({
+  mockGetAnnictToken: vi.fn(() => "test-token"),
+}));
 
 vi.mock("@anirec/annict", () => ({
   search: vi.fn(),
+}));
+
+vi.mock("../../annict.ts", () => ({
+  getAnnictToken: mockGetAnnictToken,
+}));
+
+vi.mock("./anilist-thumbnail.ts", () => ({
+  enqueueAniListThumbnailFetch: vi.fn(),
 }));
 
 import { search } from "@anirec/annict";
@@ -64,7 +76,7 @@ async function seedEpisode(
   return { workId, episodeId };
 }
 
-describe("syncAnnictTitles", () => {
+describe("refreshAnnictEpisode", () => {
   let db: Db;
   let testDb: TestDb | undefined;
 
@@ -73,6 +85,7 @@ describe("syncAnnictTitles", () => {
     db = testDb.db;
     await db.insert(sourceRoots).values({ id: ROOT_ID, path: "/media/anime" });
     vi.mocked(search).mockReset();
+    mockGetAnnictToken.mockReturnValue(TOKEN);
   });
 
   afterEach(async () => {
@@ -81,15 +94,17 @@ describe("syncAnnictTitles", () => {
   });
 
   it("token 未設定時は skipped を返して DB を更新しない", async () => {
-    await seedEpisode(db, {
+    const { workId, episodeId } = await seedEpisode(db, {
       relativePath: "Series A/#01.mp4",
       originalWorkTitle: "Series A",
       originalTitle: "#01",
     });
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: "" });
+    mockGetAnnictToken.mockReturnValue("");
 
-    expect(result).toEqual({ status: "skipped", reason: "missing_token" });
+    const result = await refreshAnnictEpisode(db, { workId, episodeId, token: "" });
+
+    expect(result).toBe("skipped");
     expect(search).not.toHaveBeenCalled();
   });
 
@@ -111,9 +126,9 @@ describe("syncAnnictTitles", () => {
       },
     });
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    const result = await refreshAnnictEpisode(db, { workId, episodeId, token: TOKEN });
 
-    expect(result).toEqual({ status: "success", matched: 1, notFound: 0, error: 0 });
+    expect(result).toBe("matched");
     expect(search).toHaveBeenCalledWith({ workTitle: "Series A", episodeTitle: "#01" }, TOKEN);
 
     const work = await db.query.works.findFirst({ where: eq(works.id, workId) });
@@ -146,9 +161,10 @@ describe("syncAnnictTitles", () => {
       episode: undefined,
     });
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    const result = await refreshAnnictEpisode(db, { workId, episodeId, token: TOKEN });
 
-    expect(result).toEqual({ status: "success", matched: 1, notFound: 0, error: 0 });
+    expect(result).toBe("matched");
+    expect(search).toHaveBeenCalledTimes(1);
 
     const work = await db.query.works.findFirst({ where: eq(works.id, workId) });
     expect(work).toMatchObject({
@@ -176,9 +192,10 @@ describe("syncAnnictTitles", () => {
 
     vi.mocked(search).mockResolvedValue(undefined);
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    const result = await refreshAnnictEpisode(db, { workId, episodeId, token: TOKEN });
 
-    expect(result).toEqual({ status: "success", matched: 0, notFound: 1, error: 0 });
+    expect(result).toBe("not_found");
+    expect(search).toHaveBeenCalledTimes(1);
 
     const work = await db.query.works.findFirst({ where: eq(works.id, workId) });
     expect(work).toMatchObject({
@@ -211,9 +228,14 @@ describe("syncAnnictTitles", () => {
 
     vi.mocked(search).mockRejectedValue(new Error("network error"));
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    const result = await refreshAnnictEpisode(db, {
+      workId: createWorkId(ROOT_ID, "Series A"),
+      episodeId,
+      token: TOKEN,
+    });
 
-    expect(result).toEqual({ status: "success", matched: 0, notFound: 0, error: 1 });
+    expect(result).toBe("error");
+    expect(search).toHaveBeenCalledTimes(1);
 
     const episode = await db.query.episodes.findFirst({ where: eq(episodes.id, episodeId) });
     expect(episode).toMatchObject({
@@ -257,9 +279,13 @@ describe("syncAnnictTitles", () => {
       },
     });
 
-    const result = await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    const result = await refreshAnnictEpisode(db, {
+      workId: createWorkId(ROOT_ID, "Error"),
+      episodeId: errorEpisodeId,
+      token: TOKEN,
+    });
 
-    expect(result).toEqual({ status: "success", matched: 1, notFound: 0, error: 0 });
+    expect(result).toBe("matched");
     expect(search).toHaveBeenCalledTimes(1);
     expect(search).toHaveBeenCalledWith({ workTitle: "Error", episodeTitle: "#01" }, TOKEN);
 
@@ -297,7 +323,12 @@ describe("syncAnnictTitles", () => {
       },
     });
 
-    await syncAnnictTitles(db, { rootId: ROOT_ID, token: TOKEN });
+    await refreshAnnictEpisode(db, {
+      workId,
+      episodeId: createEpisodeId(ROOT_ID, "Series A/#01.mp4"),
+      token: TOKEN,
+    });
+    expect(search).toHaveBeenCalledTimes(1);
 
     const work = await db.query.works.findFirst({ where: eq(works.id, workId) });
     expect(work).toMatchObject({

@@ -1,3 +1,5 @@
+import { access } from "node:fs/promises";
+
 export type ClassifiedSourceRootPathFailure = "not_found" | "not_directory" | "unreadable";
 
 interface NodeErrnoException extends Error {
@@ -6,6 +8,15 @@ interface NodeErrnoException extends Error {
 
 function isNodeErrnoException(error: unknown): error is NodeErrnoException {
   return error instanceof Error && "code" in error;
+}
+
+export async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function classifySourceRootPathFailure(error: unknown): ClassifiedSourceRootPathFailure {

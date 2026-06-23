@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 
 import { createSourceRootNotFoundError, createSourceRootPathError } from "../../errors/index.ts";
 import type { Db } from "../db/index.ts";
-import { classifySourceRootPathFailure } from "../fs-error.ts";
+import { classifySourceRootPathFailure } from "../fs.ts";
 import { assertSourceRootPathAvailable, getSourceRoot } from "./source-root.ts";
 import { listSourceExcludeRules, listSourceIncludeRules } from "./source-rule.ts";
 import type { SourceRuleRecord } from "./source-rule.ts";

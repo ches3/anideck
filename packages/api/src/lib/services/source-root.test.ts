@@ -18,6 +18,7 @@ import {
   updateSourceRoot,
 } from "./source-root.ts";
 import { createSourceIncludeRule } from "./source-rule.ts";
+import { triggerSourceSync } from "./sync/orchestrator.ts";
 import { getWork } from "./work.ts";
 
 function regexPathWithNamedGroups(workTitlePattern: string, episodeTitlePattern: string): string {
@@ -98,11 +99,6 @@ describe("source-root service", () => {
       expect(updated).toEqual({
         id: root.id,
         path: updatedDir,
-        sync: {
-          status: "success",
-          annict: { status: "skipped", reason: "missing_token" },
-          thumbnail: { status: "skipped", reason: "missing_token" },
-        },
       });
     } finally {
       await rm(updatedDir, { recursive: true, force: true });
@@ -199,6 +195,7 @@ describe("source-root service", () => {
         pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
         sortOrder: 0,
       });
+      await triggerSourceSync(db, root.id);
 
       const seriesAWorkId = createWorkId(root.id, "Series A");
       await expect(getWork(db, seriesAWorkId)).resolves.toMatchObject({
@@ -210,13 +207,11 @@ describe("source-root service", () => {
       await writeFile(join(updatedDir, "Series B", "#01.mp4"), "");
 
       const updated = await updateSourceRoot(db, root.id, { path: updatedDir });
+      await triggerSourceSync(db, root.id);
 
       expect(updated).toMatchObject({
         id: root.id,
         path: updatedDir,
-        sync: {
-          status: "success",
-        },
       });
 
       const seriesAEpisode = await db.query.episodes.findFirst({
@@ -240,7 +235,7 @@ describe("source-root service", () => {
     }
   });
 
-  it("path 更新後のデータ同期が失敗した場合は更新結果と同期結果を返す", async () => {
+  it("path 更新後のデータ同期が失敗しても更新結果を返す", async () => {
     const root = await createSourceRoot(db, { path: tempDir });
     const updatedDir = await mkdtemp(join(tmpdir(), "anideck-source-root-updated-"));
     const otherDir = await mkdtemp(join(tmpdir(), "anideck-source-root-other-"));
@@ -254,6 +249,7 @@ describe("source-root service", () => {
         pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
         sortOrder: 0,
       });
+      await triggerSourceSync(db, root.id);
       const seriesAWorkId = createWorkId(root.id, "Series A");
       await expect(getWork(db, seriesAWorkId)).resolves.toMatchObject({
         id: seriesAWorkId,
@@ -268,19 +264,17 @@ describe("source-root service", () => {
         pattern: regexPathWithNamedGroups("[^\\\\]+", "[^\\\\]+"),
         sortOrder: 0,
       });
+      await triggerSourceSync(db, otherRoot.id);
       const seriesBWorkId = createWorkId(otherRoot.id, "Series B");
 
       fsMockState.readdirErrorPath = updatedDir;
 
       const updated = await updateSourceRoot(db, root.id, { path: updatedDir });
+      await triggerSourceSync(db, root.id);
 
       expect(updated).toEqual({
         id: root.id,
         path: updatedDir,
-        sync: {
-          status: "failed",
-          error: "指定されたフォルダを読み取れません",
-        },
       });
       await expect(getSourceRoot(db, root.id)).resolves.toEqual({
         id: root.id,

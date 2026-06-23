@@ -7,13 +7,13 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { Link } from "react-router";
 
 import { Button } from "~/components/ui/button";
 import { Slider } from "~/components/ui/slider";
 import { cn } from "~/lib/utils";
 
+import { useSeekPreview, type SeekThumbnailPreviewProps } from "./use-seek-preview";
 import { formatDuration } from "./utils";
 import { SkipSecondsIcon } from "./video-player-skip-seconds-icon";
 
@@ -61,6 +61,7 @@ export type VideoPlayerControlsProps = {
   isFullscreen: boolean;
   showControls: boolean;
   seekStepSeconds: number;
+  seekThumbnail?: SeekThumbnailPreviewProps;
   onTogglePlay: () => void;
   onSeek: (time: number) => void;
   onSkipBackward: () => void;
@@ -82,6 +83,7 @@ export function VideoPlayerControls({
   isFullscreen,
   showControls,
   seekStepSeconds,
+  seekThumbnail,
   onTogglePlay,
   onSeek,
   onSkipBackward,
@@ -90,9 +92,21 @@ export function VideoPlayerControls({
   onToggleMute,
   onToggleFullscreen,
 }: VideoPlayerControlsProps) {
-  const [previewSeekTime, setPreviewSeekTime] = useState<number | null>(null);
-  const seekTime = previewSeekTime ?? currentTime;
   const volumeValue = isMuted ? 0 : volume;
+  const {
+    seekTrackRef,
+    previewTooltipRef,
+    seekTime,
+    previewTime,
+    previewLeftPx,
+    isPreviewVisible,
+    frameStyle,
+    onSeekHoverMove,
+    onSeekHoverEnd,
+    onSeekDragEnd,
+    onSeekValueChange,
+    onSeekValueCommit,
+  } = useSeekPreview({ currentTime, duration, seekThumbnail, onSeek });
 
   return (
     <div
@@ -158,25 +172,53 @@ export function VideoPlayerControls({
           data-video-control=""
         >
           <div className="flex min-w-0 flex-col gap-1 place-self-end w-full">
-            <div className="px-1.5">
+            <div
+              ref={seekTrackRef}
+              className="relative mx-1.5"
+              data-testid="seek-preview-track"
+              onPointerLeave={onSeekHoverEnd}
+              onPointerMove={onSeekHoverMove}
+            >
+              <div
+                ref={previewTooltipRef}
+                aria-hidden={!isPreviewVisible}
+                className={cn(
+                  "pointer-events-none absolute bottom-full z-10 mb-1 flex -translate-x-1/2 flex-col items-center",
+                  !isPreviewVisible && "invisible",
+                )}
+                data-testid="seek-preview-tooltip"
+                style={{
+                  left: isPreviewVisible ? `${previewLeftPx}px` : "0%",
+                }}
+              >
+                {frameStyle !== null && seekThumbnail !== undefined ? (
+                  <div
+                    className="w-64 overflow-hidden rounded-md bg-black shadow-lg outline outline-offset-0 outline-white/20"
+                    data-testid="seek-preview-thumbnail"
+                    style={{
+                      aspectRatio: `${seekThumbnail.manifest.thumbnail.width} / ${seekThumbnail.manifest.thumbnail.height}`,
+                      backgroundImage: frameStyle.backgroundImage,
+                      backgroundPosition: frameStyle.backgroundPosition,
+                      backgroundRepeat: frameStyle.backgroundRepeat,
+                      backgroundSize: frameStyle.backgroundSize,
+                    }}
+                  />
+                ) : null}
+                <span className="mt-2 rounded bg-black/50 px-2 py-0.5 text-xs font-medium text-neutral-100 tabular-nums">
+                  {previewTime === null ? null : formatDuration(previewTime)}
+                </span>
+              </div>
               <Slider
                 aria-label="再生位置"
                 className={videoSliderClassName}
-                max={duration > 0 ? duration : 100}
+                disabled={duration <= 0}
+                max={duration > 0 ? duration : 1}
                 min={0}
-                onPointerCancel={() => {
-                  setPreviewSeekTime(null);
-                }}
-                onPointerUp={() => {
-                  setPreviewSeekTime(null);
-                }}
-                onValueChange={(values) => {
-                  setPreviewSeekTime(values[0] ?? 0);
-                }}
-                onValueCommit={(values) => {
-                  setPreviewSeekTime(null);
-                  onSeek(values[0] ?? 0);
-                }}
+                onPointerCancel={onSeekDragEnd}
+                onPointerEnter={onSeekHoverMove}
+                onPointerUp={onSeekDragEnd}
+                onValueChange={onSeekValueChange}
+                onValueCommit={onSeekValueCommit}
                 step={0.1}
                 value={[seekTime]}
               />

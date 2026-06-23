@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { VideoPlayer } from "./video-player";
 
+const defaultVideoPlayerProps = {
+  backHref: "/works/work-1",
+  src: "/stream/test.mp4",
+  workTitle: "作品タイトル",
+  episodeTitle: "#01",
+  seekThumbnail: null,
+} as const;
+
 const DOUBLE_CLICK_THRESHOLD_MS = 200;
 
 function getPlayer(container: HTMLElement) {
@@ -74,13 +82,7 @@ describe("VideoPlayer", () => {
   it("ネイティブ controls なしで autoPlay と playsInline が有効になる", () => {
     render(
       <MemoryRouter>
-        <VideoPlayer
-          autoPlay
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} autoPlay />
       </MemoryRouter>,
     );
 
@@ -98,12 +100,7 @@ describe("VideoPlayer", () => {
 
     const { container } = render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -125,12 +122,7 @@ describe("VideoPlayer", () => {
   it("作品タイトル部分のクリックでは再生状態が切り替わらない", () => {
     render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -148,12 +140,7 @@ describe("VideoPlayer", () => {
   it("再生ボタンによる操作ではフィードバックが表示されない", () => {
     render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -167,12 +154,7 @@ describe("VideoPlayer", () => {
 
     const { container } = render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -195,12 +177,7 @@ describe("VideoPlayer", () => {
 
     const { container } = render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -224,12 +201,7 @@ describe("VideoPlayer", () => {
 
     const { container } = render(
       <MemoryRouter>
-        <VideoPlayer
-          backHref="/works/work-1"
-          src="/stream/test.mp4"
-          workTitle="作品タイトル"
-          episodeTitle="#01"
-        />
+        <VideoPlayer {...defaultVideoPlayerProps} />
       </MemoryRouter>,
     );
 
@@ -269,12 +241,7 @@ describe("VideoPlayer", () => {
     function renderPlayer() {
       return render(
         <MemoryRouter>
-          <VideoPlayer
-            backHref="/works/work-1"
-            src="/stream/test.mp4"
-            workTitle="作品タイトル"
-            episodeTitle="#01"
-          />
+          <VideoPlayer {...defaultVideoPlayerProps} />
         </MemoryRouter>,
       );
     }
@@ -408,12 +375,7 @@ describe("VideoPlayer", () => {
     function renderPlayer() {
       return render(
         <MemoryRouter>
-          <VideoPlayer
-            backHref="/works/work-1"
-            src="/stream/test.mp4"
-            workTitle="作品タイトル"
-            episodeTitle="#01"
-          />
+          <VideoPlayer {...defaultVideoPlayerProps} />
         </MemoryRouter>,
       );
     }

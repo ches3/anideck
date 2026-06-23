@@ -17,6 +17,7 @@ export {
   createSourceRootNotFoundError,
   createSourceRootPathError,
   createEpisodeNotFoundError,
+  createSeekThumbnailNotFoundError,
   createWorkNotFoundError,
   type SourceRootPathErrorReason,
 } from "./factories.ts";

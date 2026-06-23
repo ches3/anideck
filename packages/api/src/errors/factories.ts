@@ -48,6 +48,18 @@ export function createEpisodeNotFoundError(workId?: string, episodeId?: string) 
   );
 }
 
+export function createSeekThumbnailNotFoundError(
+  workId: string,
+  episodeId: string,
+  resourceName: string,
+) {
+  return new NotFoundError("seek thumbnail が見つかりません", {
+    workId,
+    episodeId,
+    fileName: resourceName,
+  });
+}
+
 export function createDuplicatePatternError(pattern: string) {
   return new ConflictError("同一のルールが既に存在します", {
     pattern,

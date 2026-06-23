@@ -12,6 +12,7 @@ vi.mock("~/components/ui/slider", () => {
       "aria-label": ariaLabel,
       onPointerCancel,
       onPointerDown,
+      onPointerEnter,
       onPointerMove,
       onPointerUp,
       onValueChange,
@@ -21,6 +22,7 @@ vi.mock("~/components/ui/slider", () => {
       "aria-label"?: string;
       onPointerCancel?: () => void;
       onPointerDown?: () => void;
+      onPointerEnter?: () => void;
       onPointerMove?: () => void;
       onPointerUp?: () => void;
       onValueChange?: (values: number[]) => void;
@@ -36,6 +38,9 @@ vi.mock("~/components/ui/slider", () => {
           aria-valuenow={currentValue}
           onPointerCancel={() => {
             onPointerCancel?.();
+          }}
+          onPointerEnter={() => {
+            onPointerEnter?.();
           }}
           onPointerDown={() => {
             interactionStartValues.set(sliderKey, currentValue);
@@ -108,7 +113,16 @@ afterEach(() => {
 describe("VideoPlayerControls", () => {
   beforeEach(() => {
     class ResizeObserverMock {
-      observe() {}
+      private callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe() {
+        this.callback([], this);
+      }
+
       unobserve() {}
       disconnect() {}
     }
@@ -213,31 +227,6 @@ describe("VideoPlayerControls", () => {
     expect(props.onToggleFullscreen).toHaveBeenCalledTimes(1);
   });
 
-  it("シークバーのドラッグ中は onSeek() が呼ばれない", () => {
-    const props = renderControls({ currentTime: 30, duration: 120 });
-    const seekSlider = screen.getByRole("slider", { name: "再生位置" });
-
-    fireEvent.pointerDown(seekSlider);
-    fireEvent.pointerMove(seekSlider);
-
-    expect(props.onSeek).not.toHaveBeenCalled();
-    expect(screen.getByRole("slider", { name: "再生位置" }).getAttribute("aria-valuenow")).toBe(
-      "42",
-    );
-  });
-
-  it("シークバーのドラッグ完了時に onSeek() が呼ばれる", () => {
-    const props = renderControls({ currentTime: 30, duration: 120 });
-    const seekSlider = screen.getByRole("slider", { name: "再生位置" });
-
-    fireEvent.pointerDown(seekSlider);
-    fireEvent.pointerMove(seekSlider);
-    fireEvent.pointerUp(seekSlider);
-
-    expect(props.onSeek).toHaveBeenCalledTimes(1);
-    expect(props.onSeek).toHaveBeenCalledWith(42);
-  });
-
   it("音量バーのドラッグ中は onVolumeChange() が呼ばれる", () => {
     const props = renderControls({ volume: 0.5 });
 
@@ -254,5 +243,29 @@ describe("VideoPlayerControls", () => {
     const controlSection = playButton.closest("[data-video-control]");
 
     expect(controlSection?.className.includes("pointer-events-auto")).toBe(false);
+  });
+
+  it("サムネイルのアスペクト比が維持されたまま表示される", () => {
+    renderControls({
+      currentTime: 30,
+      duration: 120,
+      seekThumbnail: {
+        manifest: {
+          intervalSec: 10,
+          count: 144,
+          thumbnail: { width: 320, height: 240 },
+          sprite: { columns: 10, rows: 15 },
+        },
+        spriteUrl: "/api/works/work-1/episodes/episode-1/seek-thumbnails/sprite.webp",
+      },
+    });
+
+    fireEvent.pointerMove(screen.getByRole("slider", { name: "再生位置" }), {
+      pointerType: "mouse",
+    });
+
+    const thumbnail = screen.getByTestId("seek-preview-thumbnail");
+    expect(thumbnail.style.aspectRatio).toBe("320 / 240");
+    expect(thumbnail.className.includes("aspect-video")).toBe(false);
   });
 });

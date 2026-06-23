@@ -7,12 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { apiApp } from "../app.ts";
 import { BadRequestError, NotFoundError } from "../errors/index.ts";
+import { buildSeekThumbnailManifest } from "../lib/seek-thumbnail/manifest.ts";
+import {
+  enqueueSeekThumbnailGeneration,
+  getSeekThumbnailManifest,
+  getSeekThumbnailSprite,
+} from "../lib/services/seek-thumbnail.ts";
 import { getWork, getWorkEpisode, listWorks } from "../lib/services/work.ts";
 import { createWorkId } from "../lib/work-id.ts";
 
 const ROOT_ID = "ROOT1";
 
 vi.mock("../lib/services/work.ts");
+vi.mock("../lib/services/seek-thumbnail.ts");
 
 const client = testClient(apiApp);
 
@@ -125,6 +132,121 @@ describe("GET /works/:workId/episodes/:episodeId", () => {
     expect(res.status).toBe(404);
     const json = await res.json();
     expect(json).toEqual({ error: "episode が見つかりません" });
+  });
+});
+
+describe("POST /works/:workId/episodes/:episodeId/seek-thumbnails/generate", () => {
+  it("生成をキューに追加して 204 を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    const episodeId = "episode-id-1";
+    vi.mocked(enqueueSeekThumbnailGeneration).mockResolvedValue("queued");
+
+    const res = await client.works[":workId"].episodes[":episodeId"][
+      "seek-thumbnails"
+    ].generate.$post({
+      param: { workId, episodeId },
+    });
+
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe("");
+    expect(enqueueSeekThumbnailGeneration).toHaveBeenCalledWith(expect.anything(), {
+      workId,
+      episodeId,
+    });
+  });
+
+  it("service が NotFoundError を投げた場合は 404 を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    vi.mocked(enqueueSeekThumbnailGeneration).mockRejectedValue(
+      new NotFoundError("episode が見つかりません"),
+    );
+
+    const res = await client.works[":workId"].episodes[":episodeId"][
+      "seek-thumbnails"
+    ].generate.$post({
+      param: { workId, episodeId: "missing-episode-id" },
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json).toEqual({ error: "episode が見つかりません" });
+  });
+});
+
+describe("GET /works/:workId/episodes/:episodeId/seek-thumbnails/manifest", () => {
+  it("ready の manifest を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    const episodeId = "episode-id-1";
+    const manifest = buildSeekThumbnailManifest({
+      durationSec: 1440,
+      videoWidth: 1920,
+      videoHeight: 1080,
+    });
+    vi.mocked(getSeekThumbnailManifest).mockResolvedValue(manifest);
+
+    const res = await client.works[":workId"].episodes[":episodeId"][
+      "seek-thumbnails"
+    ].manifest.$get({
+      param: { workId, episodeId },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(manifest);
+    expect(getSeekThumbnailManifest).toHaveBeenCalledWith(expect.anything(), workId, episodeId);
+  });
+
+  it("service が NotFoundError を投げた場合は 404 を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    vi.mocked(getSeekThumbnailManifest).mockRejectedValue(
+      new NotFoundError("seek thumbnail が見つかりません"),
+    );
+
+    const res = await client.works[":workId"].episodes[":episodeId"][
+      "seek-thumbnails"
+    ].manifest.$get({
+      param: { workId, episodeId: "missing-episode-id" },
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json).toEqual({ error: "seek thumbnail が見つかりません" });
+  });
+});
+
+describe("GET /works/:workId/episodes/:episodeId/seek-thumbnails/sprite.webp", () => {
+  it("ready の sprite を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    const episodeId = "episode-id-1";
+    const spriteBody = new TextEncoder().encode("webp-bytes");
+    vi.mocked(getSeekThumbnailSprite).mockResolvedValue(spriteBody);
+
+    const res = await client.works[":workId"].episodes[":episodeId"]["seek-thumbnails"][
+      "sprite.webp"
+    ].$get({
+      param: { workId, episodeId },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/webp");
+    expect(await res.text()).toBe("webp-bytes");
+    expect(getSeekThumbnailSprite).toHaveBeenCalledWith(expect.anything(), workId, episodeId);
+  });
+
+  it("service が NotFoundError を投げた場合は 404 を返す", async () => {
+    const workId = createWorkId(ROOT_ID, "Series A");
+    vi.mocked(getSeekThumbnailSprite).mockRejectedValue(
+      new NotFoundError("seek thumbnail が見つかりません"),
+    );
+
+    const res = await client.works[":workId"].episodes[":episodeId"]["seek-thumbnails"][
+      "sprite.webp"
+    ].$get({
+      param: { workId, episodeId: "missing-episode-id" },
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json).toEqual({ error: "seek thumbnail が見つかりません" });
   });
 });
 

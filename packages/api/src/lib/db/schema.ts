@@ -1,6 +1,8 @@
 import { relations, sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
+import type { SeekThumbnailManifest } from "../seek-thumbnail/manifest.ts";
+
 export const sourceRoots = sqliteTable("source_roots", {
   id: text("id").primaryKey(),
   path: text("path").notNull(),
@@ -82,6 +84,11 @@ export const episodes = sqliteTable(
     annictEpisodeNumberText: text("annict_episode_number_text"),
     annictNoEpisodes: integer("annict_no_episodes", { mode: "boolean" }),
     annictStatus: text("annict_status", { enum: ["matched", "not_found", "error"] }),
+    seekThumbnailManifest: text("seek_thumbnail_manifest", {
+      mode: "json",
+    }).$type<SeekThumbnailManifest | null>(),
+    sourceSize: integer("source_size"),
+    sourceMtimeMs: integer("source_mtime_ms"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .default(sql`(unixepoch())`),

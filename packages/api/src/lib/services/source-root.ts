@@ -11,16 +11,11 @@ import {
 } from "../../errors/index.ts";
 import type { Db, DbOrTransaction } from "../db/index.ts";
 import { episodes, sourceRoots } from "../db/schema.ts";
-import { classifySourceRootPathFailure } from "../fs-error.ts";
-import { type CatalogSyncStatus, trySyncSourceRootCatalog } from "./catalog-sync.ts";
+import { classifySourceRootPathFailure } from "../fs.ts";
 
 export interface SourceRootRecord {
   id: string;
   path: string;
-}
-
-export interface SourceRootMutationResult extends SourceRootRecord {
-  sync: CatalogSyncStatus;
 }
 
 async function deactivateSourceRootEpisodes(tx: DbOrTransaction, rootId: string): Promise<void> {
@@ -86,7 +81,7 @@ export async function updateSourceRoot(
   db: Db,
   rootId: string,
   input: { path: string },
-): Promise<SourceRootMutationResult> {
+): Promise<SourceRootRecord> {
   const existing = await getSourceRoot(db, rootId);
   if (existing === null) {
     throw createSourceRootNotFoundError(rootId);
@@ -110,12 +105,9 @@ export async function updateSourceRoot(
     return result[0];
   });
 
-  const sync = await trySyncSourceRootCatalog(db, rootId);
-
   return {
     id: updated.id,
     path: updated.path,
-    sync,
   };
 }
 

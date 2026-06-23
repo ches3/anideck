@@ -39,19 +39,19 @@ export interface WorkSummary {
   thumbnailUrl: string | null;
 }
 
-export interface WorkEpisode {
+export interface WorkEpisodeSummary {
   id: string;
   title: string;
   path: string;
 }
 
 export interface WorkDetail extends WorkSummary {
-  episodes: WorkEpisode[];
+  episodes: WorkEpisodeSummary[];
 }
 
 export interface WorkEpisodeDetail {
   work: WorkSummary;
-  episode: WorkEpisode;
+  episode: WorkEpisodeSummary;
 }
 
 interface EpisodeSortFields {

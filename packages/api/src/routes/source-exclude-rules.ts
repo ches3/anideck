@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { ApiEnv } from "../lib/context.ts";
 import { db } from "../lib/db/index.ts";
 import { deleteSourceExcludeRule, updateSourceExcludeRule } from "../lib/services/source-rule.ts";
+import { triggerSourceSync } from "../lib/services/sync/orchestrator.ts";
 import { sourceRuleUpdateSchema } from "../lib/validation/source-rule.ts";
 import { vValidator } from "../middleware/validator.ts";
 
@@ -11,11 +12,12 @@ export const sourceExcludeRulesRoute = new Hono<ApiEnv>()
     const ruleId = c.req.param("ruleId");
     const body = c.req.valid("json");
     const excludeRule = await updateSourceExcludeRule(db, ruleId, body);
-    const { sync, ...rule } = excludeRule;
-    return c.json({ excludeRule: rule, sync }, 200);
+    void triggerSourceSync(db, excludeRule.rootId);
+    return c.json({ excludeRule }, 200);
   })
   .delete("/:ruleId", async (c) => {
     const ruleId = c.req.param("ruleId");
-    const result = await deleteSourceExcludeRule(db, ruleId);
-    return c.json(result, 200);
+    const rootId = await deleteSourceExcludeRule(db, ruleId);
+    void triggerSourceSync(db, rootId);
+    return c.body(null, 204);
   });

@@ -1,27 +1,26 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { NotFoundError } from "../../errors/index.ts";
-import type { Db } from "../db/index.ts";
-import { episodes, sourceRoots, works } from "../db/schema.ts";
-import { createTestDb, type TestDb } from "../db/test-helper.ts";
-import { createEpisodeId, createWorkId } from "../work-id.ts";
-import {
-  applyCatalogDiff,
-  buildScannedEpisodeMap,
-  syncAllSourceRootCatalogs,
-  syncSourceRootCatalog,
-} from "./catalog-sync.ts";
-import { listSourceFiles } from "./source-file.ts";
-import { getWork, listWorks } from "./work.ts";
+import { NotFoundError } from "../../../errors/index.ts";
+import type { Db } from "../../db/index.ts";
+import { episodes, sourceRoots, works } from "../../db/schema.ts";
+import { createTestDb, type TestDb } from "../../db/test-helper.ts";
+import { createEpisodeId, createWorkId } from "../../work-id.ts";
+import { getWork, listWorks } from "../work.ts";
+import { applyCatalogDiff, buildScannedEpisodeMap } from "./catalog.ts";
 
-vi.mock("./source-file.ts", () => ({
-  listSourceFiles: vi.fn(),
+vi.mock("./annict.ts", () => ({
+  clearEpisodeAnnictFields: {
+    annictEpisodeId: null,
+    annictTitle: null,
+    annictEpisodeNumber: null,
+    annictEpisodeNumberText: null,
+    annictNoEpisodes: null,
+    annictStatus: null,
+  },
 }));
 
 const ROOT_ID = "ROOT1";
-const ANNICT_SKIPPED = { status: "skipped", reason: "missing_token" } as const;
-const THUMBNAIL_SKIPPED = { status: "skipped", reason: "missing_token" } as const;
 
 function scannedEpisode(input: {
   relativePath: string;
@@ -59,6 +58,30 @@ async function runSync(db: Db, scanned: ReturnType<typeof scannedEpisode>[]) {
     ),
   );
 }
+
+describe("buildScannedEpisodeMap", () => {
+  it("タイトルを解決できないファイルは同期対象から除外する", () => {
+    const scanned = buildScannedEpisodeMap(ROOT_ID, [
+      {
+        relativePath: "Series A/#01.mp4",
+        title: { work: "Series A", episode: "#01" },
+      },
+      {
+        relativePath: "unknown.mp4",
+        title: null,
+      },
+    ]);
+
+    expect([...scanned.values()]).toEqual([
+      {
+        rootId: ROOT_ID,
+        relativePath: "Series A/#01.mp4",
+        originalWorkTitle: "Series A",
+        originalTitle: "#01",
+      },
+    ]);
+  });
+});
 
 describe("applyCatalogDiff", () => {
   let db: Db;
@@ -570,21 +593,20 @@ describe("applyCatalogDiff", () => {
   });
 
   it("同期中にエラーが起きた場合は部分更新されない", async () => {
+    const invalidRootId = "missing-root";
+
     await expect(
-      db.transaction(async (tx) => {
-        await applyCatalogDiff(
-          tx,
-          ROOT_ID,
-          buildScannedEpisodeMap(ROOT_ID, [
-            {
-              relativePath: "Series A/#01.mp4",
-              title: { work: "Series A", episode: "#01" },
-            },
-          ]),
-        );
-        throw new Error("sync failed");
-      }),
-    ).rejects.toThrow("sync failed");
+      applyCatalogDiff(
+        db,
+        invalidRootId,
+        buildScannedEpisodeMap(invalidRootId, [
+          {
+            relativePath: "Series A/#01.mp4",
+            title: { work: "Series A", episode: "#01" },
+          },
+        ]),
+      ),
+    ).rejects.toThrow();
 
     const episodeRows = await db.select().from(episodes);
     const workRows = await db.select().from(works);
@@ -608,143 +630,6 @@ describe("applyCatalogDiff", () => {
       id: createWorkId(ROOT_ID, "Series A"),
       rootId: ROOT_ID,
       originalTitle: "Series A",
-    });
-  });
-});
-
-describe("syncSourceRootCatalog", () => {
-  let db: Db;
-  let testDb: TestDb | undefined;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    testDb = await createTestDb();
-    db = testDb.db;
-    await seedSourceRoot(db);
-  });
-
-  afterEach(async () => {
-    await testDb?.cleanup();
-    testDb = undefined;
-  });
-
-  it("タイトルを解決できないファイルは同期対象から除外する", () => {
-    const scanned = buildScannedEpisodeMap(ROOT_ID, [
-      {
-        relativePath: "Series A/#01.mp4",
-        title: { work: "Series A", episode: "#01" },
-      },
-      {
-        relativePath: "unknown.mp4",
-        title: null,
-      },
-    ]);
-
-    expect([...scanned.values()]).toEqual([
-      {
-        rootId: ROOT_ID,
-        relativePath: "Series A/#01.mp4",
-        originalWorkTitle: "Series A",
-        originalTitle: "#01",
-      },
-    ]);
-  });
-
-  it("listSourceFiles の結果を同期する", async () => {
-    vi.mocked(listSourceFiles).mockResolvedValue([
-      {
-        relativePath: "Series A/#01.mp4",
-        title: { work: "Series A", episode: "#01" },
-      },
-    ]);
-
-    const result = await syncSourceRootCatalog(db, ROOT_ID);
-
-    expect(result).toEqual({ annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED });
-
-    const rows = await db.select().from(episodes);
-    expect(rows).toHaveLength(1);
-    expect(listSourceFiles).toHaveBeenCalledWith(db, ROOT_ID);
-  });
-});
-
-describe("syncAllSourceRootCatalogs", () => {
-  let db: Db;
-  let testDb: TestDb | undefined;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    testDb = await createTestDb();
-    db = testDb.db;
-  });
-
-  afterEach(async () => {
-    await testDb?.cleanup();
-    testDb = undefined;
-  });
-
-  it("source root が 0 件の場合は空配列を返す", async () => {
-    const result = await syncAllSourceRootCatalogs(db);
-
-    expect(result).toEqual({ roots: [] });
-    expect(listSourceFiles).not.toHaveBeenCalled();
-  });
-
-  it("複数 source root それぞれの同期結果を返す", async () => {
-    const root2Id = "ROOT2";
-    await db.insert(sourceRoots).values([
-      { id: ROOT_ID, path: "/media/anime1" },
-      { id: root2Id, path: "/media/anime2" },
-    ]);
-
-    vi.mocked(listSourceFiles).mockImplementation((_db, rootId) => {
-      if (rootId === ROOT_ID) {
-        return Promise.resolve([
-          {
-            relativePath: "Series A/#01.mp4",
-            title: { work: "Series A", episode: "#01" },
-          },
-        ]);
-      }
-
-      return Promise.resolve([
-        {
-          relativePath: "Series B/#01.mp4",
-          title: { work: "Series B", episode: "#01" },
-        },
-      ]);
-    });
-
-    const result = await syncAllSourceRootCatalogs(db);
-
-    expect(result).toEqual({
-      roots: [
-        {
-          rootId: ROOT_ID,
-          sync: { status: "success", annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED },
-        },
-        {
-          rootId: root2Id,
-          sync: { status: "success", annict: ANNICT_SKIPPED, thumbnail: THUMBNAIL_SKIPPED },
-        },
-      ],
-    });
-    expect(listSourceFiles).toHaveBeenCalledWith(db, ROOT_ID);
-    expect(listSourceFiles).toHaveBeenCalledWith(db, root2Id);
-  });
-
-  it("1 件の同期が失敗した場合は root ごとの失敗結果を返す", async () => {
-    await seedSourceRoot(db);
-
-    vi.mocked(listSourceFiles).mockRejectedValue(new Error("sync failed"));
-
-    await expect(syncAllSourceRootCatalogs(db)).resolves.toEqual({
-      roots: [
-        {
-          rootId: ROOT_ID,
-          sync: { status: "failed", error: "カタログ同期に失敗しました" },
-        },
-      ],
     });
   });
 });

@@ -12,7 +12,6 @@ import {
 import { isSqliteForeignKeyConstraintError, isSqliteUniqueConstraintError } from "../db/errors.ts";
 import type { Db } from "../db/index.ts";
 import { sourceExcludeRules, sourceIncludeRules } from "../db/schema.ts";
-import { type CatalogSyncStatus, trySyncSourceRootCatalog } from "./catalog-sync.ts";
 import { assertSourceRootExists } from "./source-root.ts";
 
 export interface SourceRuleRecord {
@@ -20,16 +19,6 @@ export interface SourceRuleRecord {
   rootId: string;
   pattern: string;
   sortOrder: number;
-}
-
-export type SourceRuleSyncResult = CatalogSyncStatus;
-
-export interface SourceRuleMutationResult extends SourceRuleRecord {
-  sync: SourceRuleSyncResult;
-}
-
-export interface SourceRuleDeleteResult {
-  sync: SourceRuleSyncResult;
 }
 
 function toRuleRecord(row: {
@@ -128,7 +117,7 @@ export async function createSourceIncludeRule(
     pattern: string;
     sortOrder?: number;
   },
-): Promise<SourceRuleMutationResult> {
+): Promise<SourceRuleRecord> {
   const sortOrder = input.sortOrder ?? (await resolveNextIncludeRuleSortOrder(db, input.rootId));
 
   let result;
@@ -160,11 +149,7 @@ export async function createSourceIncludeRule(
     throw createInsertReturnedNoRowsError("source_include_rules");
   }
 
-  const rule = toRuleRecord(result[0]);
-  return {
-    ...rule,
-    sync: await trySyncSourceRootCatalog(db, rule.rootId),
-  };
+  return toRuleRecord(result[0]);
 }
 
 export async function createSourceExcludeRule(
@@ -174,7 +159,7 @@ export async function createSourceExcludeRule(
     pattern: string;
     sortOrder?: number;
   },
-): Promise<SourceRuleMutationResult> {
+): Promise<SourceRuleRecord> {
   const sortOrder = input.sortOrder ?? (await resolveNextExcludeRuleSortOrder(db, input.rootId));
 
   let result;
@@ -206,11 +191,7 @@ export async function createSourceExcludeRule(
     throw createInsertReturnedNoRowsError("source_exclude_rules");
   }
 
-  const rule = toRuleRecord(result[0]);
-  return {
-    ...rule,
-    sync: await trySyncSourceRootCatalog(db, rule.rootId),
-  };
+  return toRuleRecord(result[0]);
 }
 
 export async function updateSourceIncludeRule(
@@ -220,7 +201,7 @@ export async function updateSourceIncludeRule(
     pattern?: string;
     sortOrder?: number;
   },
-): Promise<SourceRuleMutationResult> {
+): Promise<SourceRuleRecord> {
   let result;
 
   try {
@@ -246,11 +227,7 @@ export async function updateSourceIncludeRule(
     throw createIncludeRuleNotFoundError(ruleId);
   }
 
-  const rule = toRuleRecord(result[0]);
-  return {
-    ...rule,
-    sync: await trySyncSourceRootCatalog(db, rule.rootId),
-  };
+  return toRuleRecord(result[0]);
 }
 
 export async function updateSourceExcludeRule(
@@ -260,7 +237,7 @@ export async function updateSourceExcludeRule(
     pattern?: string;
     sortOrder?: number;
   },
-): Promise<SourceRuleMutationResult> {
+): Promise<SourceRuleRecord> {
   let result;
 
   try {
@@ -286,17 +263,10 @@ export async function updateSourceExcludeRule(
     throw createExcludeRuleNotFoundError(ruleId);
   }
 
-  const rule = toRuleRecord(result[0]);
-  return {
-    ...rule,
-    sync: await trySyncSourceRootCatalog(db, rule.rootId),
-  };
+  return toRuleRecord(result[0]);
 }
 
-export async function deleteSourceIncludeRule(
-  db: Db,
-  ruleId: string,
-): Promise<SourceRuleDeleteResult> {
+export async function deleteSourceIncludeRule(db: Db, ruleId: string): Promise<string> {
   const result = await db
     .delete(sourceIncludeRules)
     .where(eq(sourceIncludeRules.id, ruleId))
@@ -306,15 +276,10 @@ export async function deleteSourceIncludeRule(
     throw createIncludeRuleNotFoundError(ruleId);
   }
 
-  return {
-    sync: await trySyncSourceRootCatalog(db, result[0].rootId),
-  };
+  return result[0].rootId;
 }
 
-export async function deleteSourceExcludeRule(
-  db: Db,
-  ruleId: string,
-): Promise<SourceRuleDeleteResult> {
+export async function deleteSourceExcludeRule(db: Db, ruleId: string): Promise<string> {
   const result = await db
     .delete(sourceExcludeRules)
     .where(eq(sourceExcludeRules.id, ruleId))
@@ -324,7 +289,5 @@ export async function deleteSourceExcludeRule(
     throw createExcludeRuleNotFoundError(ruleId);
   }
 
-  return {
-    sync: await trySyncSourceRootCatalog(db, result[0].rootId),
-  };
+  return result[0].rootId;
 }

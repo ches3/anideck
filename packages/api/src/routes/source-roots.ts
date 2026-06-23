@@ -2,7 +2,6 @@ import { Hono } from "hono";
 
 import type { ApiEnv } from "../lib/context.ts";
 import { db } from "../lib/db/index.ts";
-import { syncAllSourceRootCatalogs } from "../lib/services/catalog-sync.ts";
 import { listSourceFiles } from "../lib/services/source-file.ts";
 import {
   createSourceRoot,
@@ -16,6 +15,7 @@ import {
   listSourceExcludeRules,
   listSourceIncludeRules,
 } from "../lib/services/source-rule.ts";
+import { syncAllSources, triggerSourceSync } from "../lib/services/sync/orchestrator.ts";
 import { sourceRootCreateSchema, sourceRootUpdateSchema } from "../lib/validation/source-root.ts";
 import { sourceRuleCreateSchema } from "../lib/validation/source-rule.ts";
 import { vValidator } from "../middleware/validator.ts";
@@ -31,15 +31,15 @@ export const sourceRootsRoute = new Hono<ApiEnv>()
     return c.json({ sourceRoot }, 201);
   })
   .post("/sync", async (c) => {
-    const result = await syncAllSourceRootCatalogs(db);
+    const result = await syncAllSources(db);
     return c.json(result, 200);
   })
   .patch("/:rootId", vValidator("json", sourceRootUpdateSchema), async (c) => {
     const rootId = c.req.param("rootId");
     const body = c.req.valid("json");
     const sourceRoot = await updateSourceRoot(db, rootId, body);
-    const { sync, ...root } = sourceRoot;
-    return c.json({ sourceRoot: root, sync }, 200);
+    void triggerSourceSync(db, rootId);
+    return c.json({ sourceRoot }, 200);
   })
   .delete("/:rootId", async (c) => {
     const rootId = c.req.param("rootId");
@@ -59,8 +59,8 @@ export const sourceRootsRoute = new Hono<ApiEnv>()
       pattern: body.pattern,
       sortOrder: body.sortOrder,
     });
-    const { sync, ...rule } = includeRule;
-    return c.json({ includeRule: rule, sync }, 201);
+    void triggerSourceSync(db, rootId);
+    return c.json({ includeRule }, 201);
   })
   .get("/:rootId/exclude-rules", async (c) => {
     const rootId = c.req.param("rootId");
@@ -75,8 +75,8 @@ export const sourceRootsRoute = new Hono<ApiEnv>()
       pattern: body.pattern,
       sortOrder: body.sortOrder,
     });
-    const { sync, ...rule } = excludeRule;
-    return c.json({ excludeRule: rule, sync }, 201);
+    void triggerSourceSync(db, rootId);
+    return c.json({ excludeRule }, 201);
   })
   .get("/:rootId/files", async (c) => {
     const rootId = c.req.param("rootId");

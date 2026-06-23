@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 
 import { cn } from "~/lib/utils";
 
+import type { SeekThumbnailManifest } from "./seek-thumbnail";
 import { useVideoPlayer } from "./use-video-player";
 import { VideoPlayerCenterFeedback } from "./video-player-center-feedback";
 import { VideoPlayerControls } from "./video-player-controls";
@@ -9,11 +10,17 @@ import { VideoPlayerControls } from "./video-player-controls";
 const SEEK_STEP_SECONDS = 10;
 const DOUBLE_CLICK_THRESHOLD_MS = 200;
 
+export type SeekThumbnailData = {
+  manifest: SeekThumbnailManifest;
+  spriteUrl: string;
+};
+
 type VideoPlayerProps = {
   src: string;
   episodeTitle: string;
   workTitle: string;
   backHref: string;
+  seekThumbnail: SeekThumbnailData | null;
   autoPlay?: boolean;
   className?: string;
 };
@@ -31,6 +38,7 @@ export function VideoPlayer({
   episodeTitle,
   workTitle,
   backHref,
+  seekThumbnail,
   autoPlay = false,
   className,
 }: VideoPlayerProps) {
@@ -198,6 +206,7 @@ export function VideoPlayer({
           onUserActivity();
         }}
         seekStepSeconds={SEEK_STEP_SECONDS}
+        seekThumbnail={seekThumbnail ?? undefined}
         showControls={showControls}
         episodeTitle={episodeTitle}
         workTitle={workTitle}

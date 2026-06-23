@@ -2,6 +2,11 @@ import { Hono } from "hono";
 
 import type { ApiEnv } from "../lib/context.ts";
 import { db } from "../lib/db/index.ts";
+import {
+  enqueueSeekThumbnailGeneration,
+  getSeekThumbnailManifest,
+  getSeekThumbnailSprite,
+} from "../lib/services/seek-thumbnail.ts";
 import { getWork, getWorkEpisode, listWorks } from "../lib/services/work.ts";
 import { createVideoStreamResponse } from "../lib/video-stream.ts";
 
@@ -9,6 +14,32 @@ export const worksRoute = new Hono<ApiEnv>()
   .get("/", async (c) => {
     const works = await listWorks(db);
     return c.json({ works }, 200);
+  })
+  .post("/:workId/episodes/:episodeId/seek-thumbnails/generate", async (c) => {
+    const workId = c.req.param("workId");
+    const episodeId = c.req.param("episodeId");
+    await enqueueSeekThumbnailGeneration(db, { workId, episodeId });
+    return c.body(null, 204);
+  })
+  .get("/:workId/episodes/:episodeId/seek-thumbnails/manifest", async (c) => {
+    const workId = c.req.param("workId");
+    const episodeId = c.req.param("episodeId");
+    const manifest = await getSeekThumbnailManifest(db, workId, episodeId);
+
+    return c.json(manifest, 200);
+  })
+  .get("/:workId/episodes/:episodeId/seek-thumbnails/sprite.webp", async (c) => {
+    const workId = c.req.param("workId");
+    const episodeId = c.req.param("episodeId");
+    const body = await getSeekThumbnailSprite(db, workId, episodeId);
+
+    return new Response(Buffer.from(body), {
+      status: 200,
+      headers: {
+        "Content-Type": "image/webp",
+        "Content-Length": String(body.byteLength),
+      },
+    });
   })
   .get("/:workId/episodes/:episodeId", async (c) => {
     const workId = c.req.param("workId");
