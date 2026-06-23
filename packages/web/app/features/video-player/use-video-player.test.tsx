@@ -566,6 +566,88 @@ describe("useVideoPlayer", () => {
     });
   });
 
+  describe("beginControlInteraction() / endControlInteraction()", () => {
+    it("操作中は無操作タイマーが満了しない", () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().onUserActivity();
+        getHook().beginControlInteraction();
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(getHook().hasRecentActivity).toBe(true);
+    });
+
+    it("操作を終了してから OVERLAY_HIDE_DELAY_MS 経過後に hasRecentActivity が false になる", () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().beginControlInteraction();
+        vi.advanceTimersByTime(5000);
+        getHook().endControlInteraction();
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(getHook().hasRecentActivity).toBe(false);
+    });
+
+    it("操作中はタイマーを開始しない", () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().beginControlInteraction();
+        getHook().onUserActivity();
+        getHook().endControlInteraction();
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(getHook().hasRecentActivity).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(getHook().hasRecentActivity).toBe(false);
+    });
+
+    it("操作中は showControls が true のまま維持される", async () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      await act(async () => {
+        await getHook().play();
+      });
+
+      act(() => {
+        getHook().beginControlInteraction();
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(getHook().showControls).toBe(true);
+    });
+
+    it("begin 前の endControlInteraction ではタイマーを開始しない", () => {
+      vi.useFakeTimers();
+
+      const { getHook } = renderUseVideoPlayer();
+
+      act(() => {
+        getHook().endControlInteraction();
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(getHook().hasRecentActivity).toBe(false);
+    });
+  });
+
   describe("showControls", () => {
     it("再生中は無操作タイマー満了後に非表示になる", async () => {
       vi.useFakeTimers();

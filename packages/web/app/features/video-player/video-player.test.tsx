@@ -29,11 +29,16 @@ function advanceSingleClickDelay() {
   });
 }
 
-function createPointerUpEvent(pointerType: "mouse" | "touch", options?: { button?: number }) {
-  const event = new PointerEvent("pointerup", {
+function createPointerEvent(
+  type: "pointerdown" | "pointerup",
+  pointerType: "mouse" | "touch",
+  options?: { button?: number; pointerId?: number },
+) {
+  const event = new PointerEvent(type, {
     bubbles: true,
     button: options?.button ?? 0,
     cancelable: true,
+    pointerId: options?.pointerId ?? 1,
   });
   Object.defineProperty(event, "pointerType", {
     configurable: true,
@@ -41,6 +46,10 @@ function createPointerUpEvent(pointerType: "mouse" | "touch", options?: { button
   });
 
   return event;
+}
+
+function createPointerUpEvent(pointerType: "mouse" | "touch", options?: { button?: number }) {
+  return createPointerEvent("pointerup", pointerType, options);
 }
 
 afterEach(() => {
@@ -232,6 +241,45 @@ describe("VideoPlayer", () => {
 
     act(() => {
       vi.advanceTimersByTime(1000);
+    });
+
+    expect(controlSection?.className.includes("pointer-events-auto")).toBe(false);
+  });
+
+  it("コントロール操作終了後に非表示タイマーが再開される", () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <MemoryRouter>
+        <VideoPlayer {...defaultVideoPlayerProps} />
+      </MemoryRouter>,
+    );
+
+    const player = getPlayer(container);
+
+    fireEvent(player, createPointerUpEvent("mouse"));
+    advanceSingleClickDelay();
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    fireEvent(player, createPointerUpEvent("touch"));
+    advanceSingleClickDelay();
+
+    const muteButton = screen.getByRole("button", { name: "ミュート" });
+    const controlSection = muteButton.closest("[data-video-control]");
+    expect(controlSection?.className.includes("pointer-events-auto")).toBe(true);
+
+    fireEvent(muteButton, createPointerEvent("pointerdown", "mouse", { pointerId: 7 }));
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(controlSection?.className.includes("pointer-events-auto")).toBe(true);
+
+    fireEvent(document, createPointerEvent("pointerup", "mouse", { pointerId: 7 }));
+    act(() => {
+      vi.advanceTimersByTime(2000);
     });
 
     expect(controlSection?.className.includes("pointer-events-auto")).toBe(false);

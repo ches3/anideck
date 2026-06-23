@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -62,11 +62,14 @@ export function VideoPlayer({
     toggleMute,
     toggleFullscreen,
     onUserActivity,
+    beginControlInteraction,
+    endControlInteraction,
     triggerCenterFeedback,
   } = useVideoPlayer({ autoPlay, seekStepSeconds: SEEK_STEP_SECONDS });
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMouseClickAtRef = useRef<number | null>(null);
+  const activeControlPointerIdRef = useRef<number | null>(null);
 
   const clearClickTimer = useCallback(() => {
     if (clickTimerRef.current !== null) {
@@ -90,6 +93,25 @@ export function VideoPlayer({
       }, DOUBLE_CLICK_THRESHOLD_MS);
     },
     [clearClickTimer, isPlaying, onUserActivity, togglePlay, triggerCenterFeedback],
+  );
+
+  const handleContainerPointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (isVideoControlTarget(event.target)) {
+        activeControlPointerIdRef.current = event.pointerId;
+        beginControlInteraction();
+      }
+    },
+    [beginControlInteraction],
+  );
+
+  const handleContainerClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (isVideoControlTarget(event.target)) {
+        onUserActivity();
+      }
+    },
+    [onUserActivity],
   );
 
   const handleContainerPointerUp = useCallback(
@@ -144,6 +166,24 @@ export function VideoPlayer({
   );
 
   useEffect(() => {
+    const handleDocumentPointerEnd = (event: globalThis.PointerEvent) => {
+      if (activeControlPointerIdRef.current !== event.pointerId) {
+        return;
+      }
+
+      activeControlPointerIdRef.current = null;
+      endControlInteraction();
+    };
+
+    document.addEventListener("pointerup", handleDocumentPointerEnd, { capture: true });
+    document.addEventListener("pointercancel", handleDocumentPointerEnd, { capture: true });
+    return () => {
+      document.removeEventListener("pointerup", handleDocumentPointerEnd, { capture: true });
+      document.removeEventListener("pointercancel", handleDocumentPointerEnd, { capture: true });
+    };
+  }, [endControlInteraction]);
+
+  useEffect(() => {
     return () => {
       clearClickTimer();
     };
@@ -153,7 +193,9 @@ export function VideoPlayer({
     <div
       ref={containerRef}
       className={cn("relative h-full w-full bg-black", !showControls && "cursor-none", className)}
+      onClick={handleContainerClick}
       onMouseMove={onUserActivity}
+      onPointerDown={handleContainerPointerDown}
       onPointerUp={handleContainerPointerUp}
     >
       <video
@@ -177,34 +219,13 @@ export function VideoPlayer({
         isFullscreen={isFullscreen}
         isMuted={isMuted}
         isPlaying={isPlaying}
-        onSeek={(time) => {
-          seek(time);
-          onUserActivity();
-        }}
-        onSkipBackward={() => {
-          skipBackward();
-          onUserActivity();
-        }}
-        onSkipForward={() => {
-          skipForward();
-          onUserActivity();
-        }}
-        onToggleFullscreen={() => {
-          void toggleFullscreen();
-          onUserActivity();
-        }}
-        onToggleMute={() => {
-          toggleMute();
-          onUserActivity();
-        }}
-        onTogglePlay={() => {
-          togglePlay();
-          onUserActivity();
-        }}
-        onVolumeChange={(nextVolume) => {
-          setVideoVolume(nextVolume);
-          onUserActivity();
-        }}
+        onSeek={seek}
+        onSkipBackward={skipBackward}
+        onSkipForward={skipForward}
+        onToggleFullscreen={() => void toggleFullscreen()}
+        onToggleMute={toggleMute}
+        onTogglePlay={togglePlay}
+        onVolumeChange={setVideoVolume}
         seekStepSeconds={SEEK_STEP_SECONDS}
         seekThumbnail={seekThumbnail ?? undefined}
         showControls={showControls}

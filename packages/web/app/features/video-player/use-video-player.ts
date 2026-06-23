@@ -44,6 +44,7 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
   const videoRef = useRef<HTMLVideoElement>(null);
   const clearRecentActivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const centerFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isControlInteractionRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [centerFeedback, setCenterFeedback] = useState<CenterFeedback | null>(null);
@@ -82,11 +83,35 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
       clearRecentActivityTimeoutRef.current = null;
     }
 
+    if (isControlInteractionRef.current) {
+      return;
+    }
+
     clearRecentActivityTimeoutRef.current = setTimeout(() => {
       setHasRecentActivity(false);
       clearRecentActivityTimeoutRef.current = null;
     }, OVERLAY_HIDE_DELAY_MS);
   }, []);
+
+  const beginControlInteraction = useCallback(() => {
+    isControlInteractionRef.current = true;
+
+    if (clearRecentActivityTimeoutRef.current !== null) {
+      clearTimeout(clearRecentActivityTimeoutRef.current);
+      clearRecentActivityTimeoutRef.current = null;
+    }
+
+    setHasRecentActivity(true);
+  }, []);
+
+  const endControlInteraction = useCallback(() => {
+    if (!isControlInteractionRef.current) {
+      return;
+    }
+
+    isControlInteractionRef.current = false;
+    onUserActivity();
+  }, [onUserActivity]);
 
   const showControls = hasRecentActivity || !isPlaying;
 
@@ -411,6 +436,8 @@ export function useVideoPlayer({ autoPlay = false, seekStepSeconds }: UseVideoPl
     toggleMute,
     toggleFullscreen,
     onUserActivity,
+    beginControlInteraction,
+    endControlInteraction,
     triggerCenterFeedback,
   };
 }
